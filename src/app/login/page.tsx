@@ -14,7 +14,7 @@ function SubmitButton() {
       disabled={pending}
       className="group relative flex w-full justify-center rounded-md bg-black px-3 py-3 text-sm font-semibold text-white hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black transition-colors disabled:bg-gray-400"
     >
-      {pending ? 'Accesso in corso...' : 'Accedi'}
+      {pending ? 'Signing in...' : 'Sign in'}
     </button>
   )
 }
@@ -26,11 +26,11 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
       <div className="w-full max-w-md space-y-8">
         <div>
-          <h1 className="text-center text-3xl font-bold tracking-tight text-gray-900">
-            Kubera Clone
+          <h1 className="text-center text-3xl font-bold tracking-[0.15em] text-gray-900 uppercase">
+            KUBERA
           </h1>
           <h2 className="mt-6 text-center text-xl font-medium tracking-tight text-gray-900">
-            Bentornato
+            Sign in to your account
           </h2>
         </div>
         <form className="mt-8 space-y-6" action={formAction}>
@@ -46,7 +46,7 @@ export default function LoginPage() {
                 autoComplete="email"
                 required
                 className="relative block w-full rounded-md border-0 py-2.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-black sm:text-sm sm:leading-6"
-                placeholder="Indirizzo Email"
+                placeholder="Email address"
               />
             </div>
             <div>
@@ -77,7 +77,7 @@ export default function LoginPage() {
 
           <div className="text-center text-sm">
             <Link href="/signup" className="font-medium text-gray-600 hover:text-black">
-              Non hai un account? Registrati
+              Don&apos;t have an account? Sign up
             </Link>
           </div>
         </form>

@@ -40,9 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# local screenshots & generated PDFs
-/screenshots/
-
 # playwright
 /test-results/
 /playwright-report/

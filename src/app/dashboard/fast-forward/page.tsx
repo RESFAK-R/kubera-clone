@@ -1,6 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { FastForwardContent } from '@/components/dashboard/FastForwardContent'
+import { computeNetWorthTotals } from '@/lib/netWorth'
+import type { Asset } from '@/types/db'
+import {
+  DEFAULT_RULE_CONFIGS,
+  DEFAULT_ENABLED_STATE,
+  type RuleDefinition,
+} from '@/types/rules'
 
 export default async function FastForwardPage() {
   const supabase = await createClient()
@@ -13,63 +20,52 @@ export default async function FastForwardPage() {
     redirect('/login')
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
+  const [{ data: profile }, { data: assetsRaw }, { data: rulesRaw }] = await Promise.all([
+    supabase.from('profiles').select('base_currency').eq('id', user.id).single(),
+    supabase.from('assets').select('*').eq('user_id', user.id),
+    supabase.from('scenario_rules').select('*').eq('user_id', user.id),
+  ])
 
-  const { data: assets } = await supabase
-    .from('assets')
-    .select('*')
-    .eq('user_id', user.id)
-
-  const baseCurrency = profile?.base_currency || 'EUR'
-
-  // Calculate totals
-  let totalAssets = 0
-  let totalDebts = 0
-  let investableAssets = 0
-
-  assets?.forEach(asset => {
-    const val = Number(asset.value)
-    if (asset.asset_type === 'liability') {
-      totalDebts += val
-    } else {
-      totalAssets += val
-      if (['stock', 'crypto', 'metal', 'cash'].includes(asset.asset_type)) {
-        investableAssets += val
-      }
-    }
-  })
-
+  const assets = (assetsRaw ?? []) as Asset[]
+  const { totalAssets, totalDebts, cash: totalCash, investable: investableAssets } =
+    computeNetWorthTotals(assets)
   const totalNetWorth = totalAssets - totalDebts
+  const baseCurrency = profile?.base_currency ?? 'EUR'
+
+  // If no DB rules found (new user, trigger not yet run) seed them now
+  let rules: RuleDefinition[]
+  if (!rulesRaw || rulesRaw.length === 0) {
+    const ruleTypes = ['cash', 'investable', 'income', 'expense', 'inflation'] as const
+    const now = new Date().toISOString()
+    const toInsert = ruleTypes.map((rt) => ({
+      user_id: user.id,
+      rule_type: rt,
+      enabled: DEFAULT_ENABLED_STATE[rt],
+      config: DEFAULT_RULE_CONFIGS[rt],
+      created_at: now,
+      updated_at: now,
+    }))
+    const { data: inserted } = await supabase
+      .from('scenario_rules')
+      .insert(toInsert)
+      .select()
+    rules = (inserted ?? toInsert.map((r, i) => ({ id: `seed-${i}`, ...r }))) as RuleDefinition[]
+  } else {
+    rules = rulesRaw as RuleDefinition[]
+  }
 
   return (
     <div className="flex-1 w-full bg-[#f4f5f5] pb-24 px-8 md:px-16 overflow-y-auto">
-      <div className="max-w-[1100px] mx-auto pt-16">
-        
-        <div className="flex justify-between items-center mb-12">
-           <h1 className="text-[32px] font-bold tracking-tight text-[#1a1a1a]">
-             Fast Forward
-           </h1>
-           <div className="text-4xl">🏎️</div>
-        </div>
-
+      <div className="max-w-[1100px] mx-auto pt-10">
         <FastForwardContent
           initialNetWorth={totalNetWorth}
           totalAssets={totalAssets}
           totalDebts={totalDebts}
           investableAssets={investableAssets}
+          totalCash={totalCash}
           baseCurrency={baseCurrency}
+          serverRules={rules}
         />
-
-        <div className="mt-16 text-[13px] text-gray-500 max-w-lg space-y-4">
-           <p className="font-bold text-[#1a1a1a]">How it works</p>
-           <p>Fast Forward simulates the growth of your "Investable Assets" (Stocks, Crypto, Metals, Cash) based on a custom growth rate, while adding your monthly "Net Flow" (Salary minus Expenses) to the total.</p>
-           <p>This provides an adaptable projection that accounts for market conditions and your current lifestyle. Unlike traditional calculators, this is designed for the modern, fluctuating financial landscape.</p>
-        </div>
-
       </div>
     </div>
   )

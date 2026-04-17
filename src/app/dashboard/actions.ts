@@ -64,20 +64,90 @@ export async function addAsset(prevState: any, formData: FormData) {
     return { error: error.message }
   }
 
+  await supabase.rpc('capture_net_worth_snapshot', { p_user_id: user.id })
+  await supabase.rpc('touch_life_beat', { p_user_id: user.id })
+  revalidatePath('/dashboard')
+  return { success: true }
+}
+
+export async function updateAsset(
+  id: string,
+  patch: { name?: string; value?: number; notes?: string; metadata?: Record<string, unknown>; sheet?: string; section?: string }
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Unauthorized' }
+
+  const update: Record<string, unknown> = {}
+  if (patch.name !== undefined) update.name = patch.name
+  if (patch.value !== undefined) update.value = patch.value
+  if (patch.sheet !== undefined) update.sheet = patch.sheet
+  if (patch.section !== undefined) update.section = patch.section
+  if (patch.metadata !== undefined) update.metadata = patch.metadata
+
+  const { error } = await supabase
+    .from('assets')
+    .update(update)
+    .eq('id', id)
+    .eq('user_id', user.id)
+
+  if (error) {
+    console.error('Error updating asset:', error)
+    return { error: error.message }
+  }
+
+  await supabase.rpc('capture_net_worth_snapshot', { p_user_id: user.id })
+  await supabase.rpc('touch_life_beat', { p_user_id: user.id })
+  revalidatePath('/dashboard')
+  return { success: true }
+}
+
+export async function renameSheet(oldName: string, newName: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Unauthorized' }
+
+  const { error } = await supabase
+    .from('assets')
+    .update({ sheet: newName })
+    .eq('sheet', oldName)
+    .eq('user_id', user.id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard')
+  return { success: true }
+}
+
+export async function deleteSheet(name: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Unauthorized' }
+
+  const { error } = await supabase
+    .from('assets')
+    .delete()
+    .eq('sheet', name)
+    .eq('user_id', user.id)
+
+  if (error) return { error: error.message }
   revalidatePath('/dashboard')
   return { success: true }
 }
 
 export async function deleteAsset(id: string) {
   const supabase = await createClient()
-  
-  const { error } = await supabase.from('assets').delete().eq('id', id)
-  
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Unauthorized' }
+
+  const { error } = await supabase.from('assets').delete().eq('id', id).eq('user_id', user.id)
+
   if (error) {
     console.error('Error deleting asset:', error)
     return { error: error.message }
   }
-  
+
+  await supabase.rpc('capture_net_worth_snapshot', { p_user_id: user.id })
+  await supabase.rpc('touch_life_beat', { p_user_id: user.id })
   revalidatePath('/dashboard')
   return { success: true }
 }

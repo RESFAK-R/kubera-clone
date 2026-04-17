@@ -10,15 +10,32 @@ import {
   Tooltip as ReTooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { Plus, MoreHorizontal, Printer, ChevronDown, ChevronRight, X } from 'lucide-react'
+import { Plus, MoreHorizontal, Printer, ChevronDown, ChevronRight, X, RotateCw } from 'lucide-react'
 import { saveCashForecastPdf } from '@/app/dashboard/fast-forward/save-pdf-action'
+import { useFastForwardRules } from '@/hooks/useFastForwardRules'
+import { RuleConfigModal } from '@/components/dashboard/RuleConfigModal'
+import {
+  RuleType,
+  RuleDefinition,
+  IncomeRuleConfig,
+  ExpenseRuleConfig,
+  CashGrowthRuleConfig,
+} from '@/types/rules'
+import {
+  applyIncomeRule,
+  applyExpenseRule,
+  applyGrowthRule,
+  getMonthInfo,
+} from '@/lib/ruleEngine'
 
 type Props = {
   initialNetWorth: number
   totalAssets: number
   totalDebts: number
   investableAssets: number
+  totalCash: number
   baseCurrency: string
+  serverRules?: RuleDefinition[]
 }
 
 type Tab = 'Net Worth Projections' | 'Charts' | 'Cash Forecast'
@@ -26,7 +43,45 @@ type Tab = 'Net Worth Projections' | 'Charts' | 'Cash Forecast'
 type Rule = {
   id: string
   enabled: boolean
+  isExtra?: boolean
+  extraId?: string
   render: () => React.ReactNode
+}
+
+type ExtraRule = {
+  id: string
+  type: 'income' | 'expense'
+  description: string
+  amount: number
+  enabled: boolean
+}
+
+type LedgerRow = {
+  key: string
+  date: Date
+  description: string
+  inflow: number
+  outflow: number
+  editable: boolean
+  balance?: number
+}
+
+type ForecastPeriod = '1M' | 'QUARTER' | '3M' | 'YEAR' | '1Y'
+
+type BreakdownResult = {
+  cashOpening: number
+  investableOpening: number
+  debts: number
+  totalIncome: number
+  totalExpense: number
+  totalCashGrowth: number
+  totalInvGrowth: number
+  cashEnd: number
+  invEnd: number
+  assetsEnd: number
+  netWorthEnd: number
+  netWorthStart: number
+  assetsStart: number
 }
 
 export function FastForwardContent({
@@ -34,7 +89,9 @@ export function FastForwardContent({
   totalAssets,
   totalDebts,
   investableAssets,
+  totalCash,
   baseCurrency,
+  serverRules,
 }: Props) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
@@ -43,46 +100,87 @@ export function FastForwardContent({
   const [detailMonths, setDetailMonths] = useState<number | null>(null)
   const [detailLabel, setDetailLabel] = useState<string>('')
 
-  // Scenario rules state (editable)
-  const [cashGrowth, setCashGrowth] = useState(2)
-  const [investableGrowth, setInvestableGrowth] = useState(7)
-  const [monthlyIncome, setMonthlyIncome] = useState(10000)
-  const [incomeYearlyBump, setIncomeYearlyBump] = useState(10)
-  const [monthlyExpense, setMonthlyExpense] = useState(6000)
-  const [inflation, setInflation] = useState(3)
+  // Rules seeded server-side; no client-side fetch on mount
+  const { rules, loading: rulesLoading, saveError, updateRule, getRule, refreshRules } = useFastForwardRules(serverRules)
 
-  const [enabledRules, setEnabledRules] = useState({
-    cash: true,
-    investable: true,
-    income: true,
-    expense: true,
-    inflation: true,
-  })
+  // Rule config modal state
+  const [editingRule, setEditingRule] = useState<RuleDefinition | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
 
-  type ForecastPeriod = '1M' | 'QUARTER' | '3M' | 'YEAR' | '1Y'
-  const [forecastPeriod, setForecastPeriod] = useState<ForecastPeriod>('1M')
-  const [periodOpen, setPeriodOpen] = useState(false)
-
-  // Editable per-row overrides (keyed by `${yyyy-mm}:${description}`)
-  type LedgerRow = {
-    key: string
-    date: Date
-    description: string
-    inflow: number
-    outflow: number
-    editable: boolean
+  // Cash Forecast state
+  const LS_KEY = 'kubera_cash_forecast'
+  const loadForecastState = () => {
+    if (typeof window === 'undefined') return null
+    try {
+      return JSON.parse(localStorage.getItem(LS_KEY) ?? 'null')
+    } catch {
+      return null
+    }
   }
+
+  const savedForecast = loadForecastState()
+  const [forecastPeriod, setForecastPeriod] = useState<ForecastPeriod>(savedForecast?.period ?? '1M')
+  const [periodOpen, setPeriodOpen] = useState(false)
   const [rowOverrides, setRowOverrides] = useState<Record<string, { inflow?: number; outflow?: number; description?: string }>>({})
-  const [customRows, setCustomRows] = useState<{ key: string; date: Date; description: string; inflow: number; outflow: number }[]>([])
+
+  // Extra rules (custom income/expense on top of base rules)
+  const LS_EXTRA_KEY = 'kubera_extra_rules'
+  const loadExtraRules = () => {
+    if (typeof window === 'undefined') return []
+    try {
+      return JSON.parse(localStorage.getItem(LS_EXTRA_KEY) ?? '[]')
+    } catch {
+      return []
+    }
+  }
+
+  const [extraRules, setExtraRulesRaw] = useState<ExtraRule[]>(loadExtraRules())
+  const setExtraRules = (updater: ExtraRule[] | ((prev: ExtraRule[]) => ExtraRule[])) => {
+    setExtraRulesRaw((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LS_EXTRA_KEY, JSON.stringify(next))
+      }
+      return next
+    })
+  }
+
+  const addExtraRule = (type: 'income' | 'expense' = 'income', desc = 'New entry', amount = 0) => {
+    const rule: ExtraRule = { id: crypto.randomUUID(), type, description: desc, amount, enabled: true }
+    setExtraRules((prev) => [...prev, rule])
+  }
+
+  const updateExtraRule = (id: string, patch: Partial<ExtraRule>) => {
+    setExtraRules((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+  }
+
+  const removeExtraRule = (id: string) => {
+    setExtraRules((prev) => prev.filter((r) => r.id !== id))
+  }
+
+  const toggleExtraRule = (id: string) => {
+    setExtraRules((prev) => prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)))
+  }
+
+  // Get enabled rules
+  const incomeRule = getRule('income')
+  const expenseRule = getRule('expense')
+  const cashRule = getRule('cash')
+  const investableRule = getRule('investable')
 
   const monthsForPeriod = (p: ForecastPeriod) => {
     const now = new Date()
     switch (p) {
-      case '1M': return 1
-      case 'QUARTER': return 3
-      case '3M': return 3
-      case 'YEAR': return Math.max(1, 12 - now.getMonth())
-      case '1Y': return 12
+      case '1M':
+        return 1
+      case 'QUARTER':
+        return 3
+      case '3M':
+        return 3
+      case 'YEAR':
+        return Math.max(1, 12 - now.getMonth())
+      case '1Y':
+        return 12
     }
   }
 
@@ -91,17 +189,20 @@ export function FastForwardContent({
     return new Date(now.getFullYear(), now.getMonth(), 1)
   }, [])
 
+  // Generate cash forecast ledger rows using rule engine
   const { rows, totalInflow, totalOutflow, openingBalance, closingBalance } = useMemo(() => {
+    // Generate rows even if some rules are missing - only skip if NO rules at all
     const months = monthsForPeriod(forecastPeriod)
     const list: LedgerRow[] = []
     const openingBalance = 0
     let balance = openingBalance
 
     let cashPool = Math.max(0, totalAssets - investableAssets - totalDebts)
-    let income = enabledRules.income ? monthlyIncome : 0
-    const expense = enabledRules.expense ? monthlyExpense : 0
-    const mCash = enabledRules.cash ? Math.pow(1 + cashGrowth / 100, 1 / 12) - 1 : 0
+    const incomeConfig = incomeRule?.config as IncomeRuleConfig | undefined
+    const expenseConfig = expenseRule?.config as ExpenseRuleConfig | undefined
+    const cashConfig = cashRule?.config as CashGrowthRuleConfig | undefined
 
+    // Opening row
     const opening: LedgerRow = {
       key: 'opening',
       date: start,
@@ -112,67 +213,103 @@ export function FastForwardContent({
     }
     list.push(opening)
 
+    // Generate rows for each month
     for (let m = 0; m < months; m++) {
       const d = new Date(start.getFullYear(), start.getMonth() + m, 1)
-      if (m > 0 && d.getMonth() === 0 && enabledRules.income) {
-        income = income * (1 + incomeYearlyBump / 100)
-      }
+      const monthIndex = d.getMonth()
+      const year = d.getFullYear()
+      const yearsSinceStart = Math.floor(m / 12)
 
-      if (enabledRules.income && income > 0) {
-        const key = `${d.getFullYear()}-${d.getMonth()}:salary`
-        const ovr = rowOverrides[key]
-        list.push({
-          key,
-          date: d,
-          description: ovr?.description ?? 'Salary',
-          inflow: ovr?.inflow ?? income,
-          outflow: 0,
-          editable: true,
-        })
-      }
+      // Income rows
+      if (incomeRule?.enabled && incomeConfig) {
+        const income = applyIncomeRule(incomeConfig, monthIndex, yearsSinceStart)
 
-      if (enabledRules.cash && mCash > 0) {
-        const growth = cashPool * mCash
-        if (growth > 0.5 || m === 0) {
-          const key = `${d.getFullYear()}-${d.getMonth()}:cashgrow`
+        if (income.baseIncome > 0) {
+          const key = `${year}-${monthIndex}:salary`
           const ovr = rowOverrides[key]
           list.push({
             key,
             date: d,
-            description: ovr?.description ?? `Cash grows by ${cashGrowth}% per year`,
-            inflow: ovr?.inflow ?? Math.round(growth),
+            description: ovr?.description ?? 'Salary',
+            inflow: ovr?.inflow ?? income.baseIncome,
             outflow: 0,
             editable: true,
           })
-          cashPool += growth
+          cashPool += ovr?.inflow ?? income.baseIncome
+        }
+
+        if (income.extraPayment > 0) {
+          const monthInfo = getMonthInfo(monthIndex)
+          const extraKey = `${year}-${monthIndex}:extra-salary-${monthInfo.shortName}`
+          const ovr = rowOverrides[extraKey]
+          list.push({
+            key: extraKey,
+            date: d,
+            description: ovr?.description ?? `${monthInfo.name} Extra (13esima/14esima)`,
+            inflow: ovr?.inflow ?? income.extraPayment,
+            outflow: 0,
+            editable: true,
+          })
+          cashPool += ovr?.inflow ?? income.extraPayment
         }
       }
 
-      if (enabledRules.expense && expense > 0) {
-        const key = `${d.getFullYear()}-${d.getMonth()}:expenses`
+      // Cash growth rows
+      if (cashRule?.enabled && cashConfig) {
+        const growth = applyGrowthRule(cashConfig, cashPool, monthIndex)
+        if (Math.abs(growth) > 0.5 || m === 0) {
+          const key = `${year}-${monthIndex}:cashgrow`
+          const ovr = rowOverrides[key]
+          const growthAmount = ovr?.inflow ?? Math.round(growth)
+          list.push({
+            key,
+            date: d,
+            description: ovr?.description ?? `Cash grows by ${cashConfig.growth_percent_yearly}% per year`,
+            inflow: growthAmount > 0 ? growthAmount : 0,
+            outflow: growthAmount < 0 ? Math.abs(growthAmount) : 0,
+            editable: true,
+          })
+          cashPool += growthAmount
+        }
+      }
+
+      // Expense rows
+      if (expenseRule?.enabled && expenseConfig) {
+        const expense = applyExpenseRule(expenseConfig, monthIndex)
+        if (expense > 0) {
+          const key = `${year}-${monthIndex}:expenses`
+          const ovr = rowOverrides[key]
+          list.push({
+            key,
+            date: d,
+            description: ovr?.description ?? 'Expenses',
+            inflow: 0,
+            outflow: ovr?.outflow ?? expense,
+            editable: true,
+          })
+          cashPool -= expense
+        }
+      }
+
+      // Extra rules rows
+      for (const er of extraRules) {
+        if (!er.enabled) continue
+        const key = `${year}-${monthIndex}:extra-${er.id}`
         const ovr = rowOverrides[key]
         list.push({
           key,
           date: d,
-          description: ovr?.description ?? 'Expenses',
-          inflow: 0,
-          outflow: ovr?.outflow ?? expense,
+          description: ovr?.description ?? er.description,
+          inflow: er.type === 'income' ? (ovr?.inflow ?? er.amount) : 0,
+          outflow: er.type === 'expense' ? (ovr?.outflow ?? er.amount) : 0,
           editable: true,
         })
-      }
-
-      if (enabledRules.income) cashPool += income
-      if (enabledRules.expense) cashPool -= expense
-
-      // Append custom rows for this month
-      for (const cr of customRows) {
-        if (cr.date.getFullYear() === d.getFullYear() && cr.date.getMonth() === d.getMonth()) {
-          list.push({ ...cr, editable: true })
-        }
+        if (er.type === 'income') cashPool += ovr?.inflow ?? er.amount
+        if (er.type === 'expense') cashPool -= ovr?.outflow ?? er.amount
       }
     }
 
-    // Compute running balance
+    // Calculate running balance
     let run = openingBalance
     let totalInflow = 0
     let totalOutflow = 0
@@ -180,7 +317,7 @@ export function FastForwardContent({
       run += r.inflow - r.outflow
       totalInflow += r.inflow
       totalOutflow += r.outflow
-      ;(r as LedgerRow & { balance: number }).balance = run
+      r.balance = run
     }
 
     const closingBalance = run
@@ -191,14 +328,224 @@ export function FastForwardContent({
     totalAssets,
     investableAssets,
     totalDebts,
-    monthlyIncome,
-    incomeYearlyBump,
-    monthlyExpense,
-    cashGrowth,
-    enabledRules,
+    incomeRule,
+    expenseRule,
+    cashRule,
     rowOverrides,
-    customRows,
+    extraRules,
   ])
+
+  // Projection calculations using rule engine
+  const projection = useMemo(() => {
+    if (!incomeRule || !expenseRule || !cashRule || !investableRule) {
+      return []
+    }
+
+    const months = 20 * 12
+    const out: { month: number; netWorth: number; assets: number; debts: number; income: number; expenses: number }[] = []
+
+    let nw = initialNetWorth
+    let assets = totalAssets
+    const debts = totalDebts
+    let investable = investableAssets
+    let cash = totalCash
+    const illiquid = totalAssets - investableAssets - totalCash
+
+    const incomeConfig = incomeRule.config as IncomeRuleConfig
+    const expenseConfig = expenseRule.config as ExpenseRuleConfig
+    const cashConfig = cashRule.config as CashGrowthRuleConfig
+    const investableConfig = investableRule.config as CashGrowthRuleConfig
+
+    out.push({ month: 0, netWorth: nw, assets, debts, income: 0, expenses: 0 })
+
+    let cumIncome = 0
+    let cumExpense = 0
+
+    const extraIncome = extraRules
+      .filter((r) => r.enabled && r.type === 'income')
+      .reduce((s, r) => s + r.amount, 0)
+    const extraExpense = extraRules
+      .filter((r) => r.enabled && r.type === 'expense')
+      .reduce((s, r) => s + r.amount, 0)
+
+    for (let m = 1; m <= months; m++) {
+      const monthIndex = (m - 1) % 12
+      const yearsSinceStart = Math.floor(m / 12)
+
+      // Apply income
+      let monthIncome = 0
+      if (incomeRule.enabled) {
+        const income = applyIncomeRule(incomeConfig, monthIndex, yearsSinceStart - 1)
+        monthIncome = income.totalIncome
+      }
+
+      // Apply expense
+      let monthExpense = 0
+      if (expenseRule.enabled) {
+        monthExpense = applyExpenseRule(expenseConfig, monthIndex)
+      }
+
+      const netFlow = monthIncome + extraIncome - monthExpense - extraExpense
+      cash += netFlow
+      cumIncome += monthIncome + extraIncome
+      cumExpense += monthExpense + extraExpense
+
+      // Apply growth
+      if (investableRule.enabled) {
+        const invGrowth = applyGrowthRule(investableConfig, investable, monthIndex)
+        investable += invGrowth
+      }
+
+      if (cashRule.enabled) {
+        const cashGrowth = applyGrowthRule(cashConfig, cash, monthIndex)
+        cash += cashGrowth
+      }
+
+      assets = investable + cash + illiquid
+      nw = assets - debts
+
+      out.push({ month: m, netWorth: nw, assets, debts, income: cumIncome, expenses: cumExpense })
+    }
+
+    return out
+  }, [
+    initialNetWorth,
+    totalAssets,
+    totalDebts,
+    investableAssets,
+    totalCash,
+    incomeRule,
+    expenseRule,
+    cashRule,
+    investableRule,
+    extraRules,
+  ])
+
+  const computeBreakdown = (months: number) => {
+    if (!incomeRule || !expenseRule || !cashRule || !investableRule) {
+      return {
+        cashOpening: 0,
+        investableOpening: 0,
+        debts: totalDebts,
+        totalIncome: 0,
+        totalExpense: 0,
+        totalCashGrowth: 0,
+        totalInvGrowth: 0,
+        cashEnd: 0,
+        invEnd: 0,
+        assetsEnd: 0,
+        netWorthEnd: 0,
+        netWorthStart: 0,
+        assetsStart: totalAssets,
+      }
+    }
+
+    const debts = totalDebts
+    let cashStart = totalCash
+    let investableStart = investableAssets
+    const illiquid = totalAssets - investableAssets - totalCash
+    const cashOpening = cashStart
+    const investableOpening = investableStart
+
+    const incomeConfig = incomeRule.config as IncomeRuleConfig
+    const expenseConfig = expenseRule.config as ExpenseRuleConfig
+    const cashConfig = cashRule.config as CashGrowthRuleConfig
+    const investableConfig = investableRule.config as CashGrowthRuleConfig
+
+    let totalIncome = 0
+    let totalExpense = 0
+    let totalCashGrowth = 0
+    let totalInvGrowth = 0
+    let cash = cashStart
+    let investable = investableStart
+
+    const extraIncome = extraRules
+      .filter((r) => r.enabled && r.type === 'income')
+      .reduce((s, r) => s + r.amount, 0)
+    const extraExpense = extraRules
+      .filter((r) => r.enabled && r.type === 'expense')
+      .reduce((s, r) => s + r.amount, 0)
+
+    for (let m = 1; m <= months; m++) {
+      const monthIndex = (m - 1) % 12
+      const yearsSinceStart = Math.floor(m / 12)
+
+      if (incomeRule.enabled) {
+        const income = applyIncomeRule(incomeConfig, monthIndex, yearsSinceStart - 1)
+        cash += income.totalIncome
+        totalIncome += income.totalIncome
+      }
+
+      if (expenseRule.enabled) {
+        const expense = applyExpenseRule(expenseConfig, monthIndex)
+        cash -= expense
+        totalExpense += expense
+      }
+
+      if (cashRule.enabled) {
+        const g = applyGrowthRule(cashConfig, cash, monthIndex)
+        cash += g
+        totalCashGrowth += g
+      }
+
+      if (investableRule.enabled) {
+        const g = applyGrowthRule(investableConfig, investable, monthIndex)
+        investable += g
+        totalInvGrowth += g
+      }
+
+      cash += extraIncome
+      cash -= extraExpense
+      totalIncome += extraIncome
+      totalExpense += extraExpense
+    }
+
+    const cashEnd = cash
+    const invEnd = investable
+    const assetsEnd = cashEnd + invEnd + illiquid
+    const netWorthEnd = assetsEnd - debts
+    const netWorthStart = cashOpening + investableOpening + illiquid - debts
+
+    return {
+      cashOpening,
+      investableOpening,
+      debts,
+      totalIncome,
+      totalExpense,
+      totalCashGrowth,
+      totalInvGrowth,
+      cashEnd,
+      invEnd,
+      assetsEnd,
+      netWorthEnd,
+      netWorthStart,
+      assetsStart: totalAssets,
+    }
+  }
+
+  const at = (m: number) => projection[Math.min(m, projection.length - 1)]
+  const m1 = at(1)
+  const y1 = at(12)
+  const y5 = at(60)
+  const y10 = at(120)
+  const y20 = at(240)
+
+  const currentYear = new Date().getFullYear()
+
+  const sym = baseCurrency === 'EUR' ? '€' : '$'
+  const fmt = (val: number) => `${sym} ${Math.round(val).toLocaleString('de-DE')}`
+  const fmtCompact = (val: number) => {
+    const abs = Math.abs(val)
+    if (abs >= 1_000_000) return `${sym} ${(val / 1_000_000).toFixed(2).replace('.', ',')} Million`
+    if (abs >= 1_000) return `${sym} ${Math.round(val).toLocaleString('de-DE')}`
+    return `${sym} ${val.toFixed(0)}`
+  }
+  const fmtDelta = (val: number) => {
+    const sign = val >= 0 ? '+' : '-'
+    const abs = Math.abs(val)
+    if (abs >= 1_000_000) return `${sign}${sym}${(abs / 1_000_000).toFixed(3).replace('.', ',')}M`
+    return `${sign}${sym}${Math.round(abs).toLocaleString('de-DE')}`
+  }
 
   const periodLabel = useMemo(() => {
     const months = monthsForPeriod(forecastPeriod)
@@ -227,20 +574,7 @@ export function FastForwardContent({
   const netFlow = totalInflow - totalOutflow
 
   const updateRow = (key: string, patch: { inflow?: number; outflow?: number; description?: string }) => {
-    setRowOverrides(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }))
-  }
-  const addCustomRow = () => {
-    const d = new Date(start.getFullYear(), start.getMonth(), 1)
-    setCustomRows(prev => [
-      ...prev,
-      { key: `custom-${crypto.randomUUID()}`, date: d, description: 'New entry', inflow: 0, outflow: 0 },
-    ])
-  }
-  const updateCustomRow = (key: string, patch: Partial<{ description: string; inflow: number; outflow: number }>) => {
-    setCustomRows(prev => prev.map(r => (r.key === key ? { ...r, ...patch } : r)))
-  }
-  const removeCustomRow = (key: string) => {
-    setCustomRows(prev => prev.filter(r => r.key !== key))
+    setRowOverrides((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }))
   }
 
   const handlePrintPdf = async () => {
@@ -268,11 +602,15 @@ export function FastForwardContent({
     doc.setFontSize(11)
     doc.setTextColor(150)
     const periodName =
-      forecastPeriod === '1M' ? '1 Month'
-      : forecastPeriod === 'QUARTER' ? 'This Quarter'
-      : forecastPeriod === '3M' ? '3 Months'
-      : forecastPeriod === 'YEAR' ? 'This Year'
-      : '1 Year'
+      forecastPeriod === '1M'
+        ? '1 Month'
+        : forecastPeriod === 'QUARTER'
+          ? 'This Quarter'
+          : forecastPeriod === '3M'
+            ? '3 Months'
+            : forecastPeriod === 'YEAR'
+              ? 'This Year'
+              : '1 Year'
     doc.text(periodName, 40 + doc.getTextWidth(periodLabel) + 10, 90)
 
     // Summary line
@@ -302,16 +640,18 @@ export function FastForwardContent({
     })
 
     // Table
-    const body = rows.map(r => [
+    const body = rows.map((r) => [
       r.date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
       r.description,
       r.inflow > 0 ? fmt(r.inflow) : '',
       r.outflow > 0 ? fmt(r.outflow) : '',
-      fmt((r as LedgerRow & { balance: number }).balance),
+      fmt(r.balance ?? 0),
     ])
     body.push([
-      new Date(start.getFullYear(), start.getMonth() + monthsForPeriod(forecastPeriod) - 1, 1)
-        .toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+      new Date(start.getFullYear(), start.getMonth() + monthsForPeriod(forecastPeriod) - 1, 1).toLocaleDateString(
+        'en-US',
+        { month: 'short', year: 'numeric' }
+      ),
       'Closing Balance',
       '',
       '',
@@ -335,7 +675,7 @@ export function FastForwardContent({
         3: { halign: 'right', cellWidth: 80 },
         4: { halign: 'right', cellWidth: 90 },
       },
-      didParseCell: data => {
+      didParseCell: (data) => {
         if (data.section === 'body' && data.row.raw && (data.row.raw as string[])[1] === 'Closing Balance') {
           data.cell.styles.fontStyle = 'bold'
         }
@@ -355,228 +695,154 @@ export function FastForwardContent({
     doc.save(filename)
   }
 
-  const sym = baseCurrency === 'EUR' ? '€' : '$'
-  const fmt = (val: number) =>
-    `${sym} ${Math.round(val).toLocaleString('de-DE')}`
-  const fmtCompact = (val: number) => {
-    const abs = Math.abs(val)
-    if (abs >= 1_000_000) return `${sym} ${(val / 1_000_000).toFixed(2).replace('.', ',')} Million`
-    if (abs >= 1_000) return `${sym} ${Math.round(val).toLocaleString('de-DE')}`
-    return `${sym} ${val.toFixed(0)}`
-  }
-  const fmtDelta = (val: number) => {
-    const sign = val >= 0 ? '+' : '-'
-    const abs = Math.abs(val)
-    if (abs >= 1_000_000) return `${sign}${sym}${(abs / 1_000_000).toFixed(3).replace('.', ',')}M`
-    return `${sign}${sym}${Math.round(abs).toLocaleString('de-DE')}`
-  }
-
-  // Projection engine: monthly compounding
-  const projection = useMemo(() => {
-    const months = 20 * 12
-    const out: { month: number; netWorth: number; assets: number; debts: number; income: number; expenses: number }[] = []
-    let nw = initialNetWorth
-    let assets = totalAssets
-    const debts = totalDebts
-    let investable = investableAssets
-    let cash = Math.max(0, totalAssets - investableAssets - totalDebts)
-    let income = enabledRules.income ? monthlyIncome : 0
-    const expense = enabledRules.expense ? monthlyExpense : 0
-
-    const mCash = enabledRules.cash ? Math.pow(1 + cashGrowth / 100, 1 / 12) - 1 : 0
-    const mInv = enabledRules.investable ? Math.pow(1 + investableGrowth / 100, 1 / 12) - 1 : 0
-
-    out.push({ month: 0, netWorth: nw, assets, debts, income: 0, expenses: 0 })
-
-    let cumIncome = 0
-    let cumExpense = 0
-
-    for (let m = 1; m <= months; m++) {
-      // yearly income bump every 12 months
-      if (m > 1 && m % 12 === 1 && enabledRules.income) {
-        income = income * (1 + incomeYearlyBump / 100)
-      }
-      const netFlow = income - expense
-      cash += netFlow
-      cumIncome += income
-      cumExpense += expense
-
-      // Apply growth
-      investable = investable * (1 + mInv)
-      cash = cash * (1 + mCash)
-
-      assets = investable + cash
-      nw = assets - debts
-
-      out.push({ month: m, netWorth: nw, assets, debts, income: cumIncome, expenses: cumExpense })
-    }
-    return out
-  }, [
-    initialNetWorth,
-    totalAssets,
-    totalDebts,
-    investableAssets,
-    cashGrowth,
-    investableGrowth,
-    monthlyIncome,
-    incomeYearlyBump,
-    monthlyExpense,
-    enabledRules,
-  ])
-
-  const computeBreakdown = (months: number) => {
-    const debts = totalDebts
-    let cashStart = Math.max(0, totalAssets - investableAssets - totalDebts)
-    let investableStart = investableAssets
-    const cashOpening = cashStart
-    const investableOpening = investableStart
-
-    let income = enabledRules.income ? monthlyIncome : 0
-    const expense = enabledRules.expense ? monthlyExpense : 0
-    const mCash = enabledRules.cash ? Math.pow(1 + cashGrowth / 100, 1 / 12) - 1 : 0
-    const mInv = enabledRules.investable ? Math.pow(1 + investableGrowth / 100, 1 / 12) - 1 : 0
-
-    let totalIncome = 0
-    let totalExpense = 0
-    let totalCashGrowth = 0
-    let totalInvGrowth = 0
-    let cash = cashStart
-    let investable = investableStart
-
-    for (let m = 1; m <= months; m++) {
-      const d = new Date(start.getFullYear(), start.getMonth() + m, 1)
-      if (m > 1 && d.getMonth() === 0 && enabledRules.income) {
-        income = income * (1 + incomeYearlyBump / 100)
-      }
-      if (enabledRules.income) {
-        cash += income
-        totalIncome += income
-      }
-      if (enabledRules.expense) {
-        cash -= expense
-        totalExpense += expense
-      }
-      if (enabledRules.cash) {
-        const g = cash * mCash
-        cash += g
-        totalCashGrowth += g
-      }
-      if (enabledRules.investable) {
-        const g = investable * mInv
-        investable += g
-        totalInvGrowth += g
-      }
-    }
-
-    const cashEnd = cash
-    const invEnd = investable
-    const assetsEnd = cashEnd + invEnd
-    const netWorthEnd = assetsEnd - debts
-    const netWorthStart = cashOpening + investableOpening - debts
-    return {
-      cashOpening,
-      investableOpening,
-      debts,
-      totalIncome,
-      totalExpense,
-      totalCashGrowth,
-      totalInvGrowth,
-      cashEnd,
-      invEnd,
-      assetsEnd,
-      netWorthEnd,
-      netWorthStart,
-      assetsStart: cashOpening + investableOpening,
-    }
-  }
-
-  const at = (m: number) => projection[Math.min(m, projection.length - 1)]
-  const m1 = at(1)
-  const y1 = at(12)
-  const y5 = at(60)
-  const y10 = at(120)
-  const y20 = at(240)
-
-  const currentYear = new Date().getFullYear()
-
-  if (!mounted)
-    return <div className="min-h-[600px] w-full bg-gray-50 animate-pulse rounded-lg" />
-
-  const toggle = (key: keyof typeof enabledRules) =>
-    setEnabledRules(prev => ({ ...prev, [key]: !prev[key] }))
-
-  const rules: Rule[] = [
+  // Rules array for rendering UI
+  const displayRules: Rule[] = [
     {
       id: 'cash',
-      enabled: enabledRules.cash,
-      render: () => (
-        <>
-          Value of <EditLink>Cash</EditLink> to change by{' '}
-          <EditValue onChange={v => setCashGrowth(v)} value={cashGrowth} suffix="% per year" />
-        </>
-      ),
+      enabled: cashRule?.enabled ?? false,
+      render: () => {
+        const cfg = cashRule?.config as CashGrowthRuleConfig | undefined
+        return (
+          <>
+            Value of <EditLink>Cash</EditLink> to change by{' '}
+            <span className="text-blue-500">{cfg?.growth_percent_yearly ?? 0}%</span> per year
+          </>
+        )
+      },
     },
     {
       id: 'investable',
-      enabled: enabledRules.investable,
-      render: () => (
-        <>
-          Value of <EditLink>Investable Assets</EditLink> to change by{' '}
-          <EditValue onChange={v => setInvestableGrowth(v)} value={investableGrowth} suffix="% per year" />
-        </>
-      ),
+      enabled: investableRule?.enabled ?? false,
+      render: () => {
+        const cfg = investableRule?.config as CashGrowthRuleConfig | undefined
+        return (
+          <>
+            Value of <EditLink>Investable Assets</EditLink> to change by{' '}
+            <span className="text-blue-500">{cfg?.growth_percent_yearly ?? 0}%</span> per year
+          </>
+        )
+      },
     },
     {
       id: 'income',
-      enabled: enabledRules.income,
-      render: () => (
-        <>
-          Income of <EditLink>{sym === '€' ? 'EUR' : 'USD'} {monthlyIncome.toLocaleString('de-DE')}</EditLink>{' '}
-          from <EditLink>Salary</EditLink>. Repeats <EditLink>every month</EditLink>. Revised to{' '}
-          <EditLink>+{incomeYearlyBump}%</EditLink> every year in <EditLink>Jan</EditLink>
-        </>
-      ),
+      enabled: incomeRule?.enabled ?? false,
+      render: () => {
+        const cfg = incomeRule?.config as IncomeRuleConfig | undefined
+        return (
+          <>
+            Income of <EditLink>{sym === '€' ? 'EUR' : 'USD'}</EditLink>{' '}
+            <span className="text-blue-500">{cfg?.base_monthly?.toLocaleString('de-DE') ?? 0}</span> from{' '}
+            <EditLink>Salary</EditLink>. Repeats <EditLink>every month</EditLink>. Revised to{' '}
+            +<span className="text-blue-500">{cfg?.yearly_bump_percent ?? 0}%</span> every year in{' '}
+            <EditLink>{getMonthInfo(cfg?.yearly_bump_month ?? 0).shortName}</EditLink>
+          </>
+        )
+      },
     },
     {
       id: 'expense',
-      enabled: enabledRules.expense,
+      enabled: expenseRule?.enabled ?? false,
+      render: () => {
+        const cfg = expenseRule?.config as ExpenseRuleConfig | undefined
+        return (
+          <>
+            Expense of <EditLink>{sym === '€' ? 'EUR' : 'USD'}</EditLink>{' '}
+            <span className="text-blue-500">{cfg?.base_monthly?.toLocaleString('de-DE') ?? 0}</span> towards{' '}
+            <EditLink>Expenses</EditLink>. Repeats <EditLink>every month</EditLink>
+          </>
+        )
+      },
+    },
+    ...extraRules.map((er) => ({
+      id: `extra-${er.id}`,
+      enabled: er.enabled,
+      isExtra: true,
+      extraId: er.id,
       render: () => (
         <>
-          Expense of <EditLink>{sym === '€' ? 'EUR' : 'USD'} {monthlyExpense.toLocaleString('de-DE')}</EditLink>{' '}
-          towards <EditLink>Expenses</EditLink>. Repeats <EditLink>every month</EditLink>
+          {er.type === 'income' ? 'Income' : 'Expense'} of{' '}
+          <EditLink>{sym === '€' ? 'EUR' : 'USD'}</EditLink>{' '}
+          <span className="text-blue-500">{er.amount.toLocaleString('de-DE')}</span> from{' '}
+          <span
+            contentEditable
+            suppressContentEditableWarning
+            onBlur={(e) => updateExtraRule(er.id, { description: e.currentTarget.textContent ?? er.description })}
+            className="text-blue-500 underline decoration-dotted underline-offset-2 cursor-text focus:outline-none"
+          >
+            {er.description}
+          </span>
+          . Repeats <EditLink>every month</EditLink>
         </>
       ),
-    },
-    {
-      id: 'inflation',
-      enabled: enabledRules.inflation,
-      render: () => (
-        <>
-          Inflation rate is <EditValue onChange={v => setInflation(v)} value={inflation} suffix="% per year" />
-        </>
-      ),
-    },
+    })),
   ]
+
+  const toggle = (key: string) => {
+    if (key.startsWith('extra-')) {
+      toggleExtraRule(key.replace('extra-', ''))
+    } else {
+      const ruleType = key as RuleType
+      const rule = getRule(ruleType)
+      if (rule) {
+        updateRule(ruleType, !rule.enabled, rule.config)
+      }
+    }
+  }
+
+  const handleEditRule = (ruleType: RuleType) => {
+    const rule = getRule(ruleType)
+    if (rule) {
+      setEditingRule(rule)
+      setModalOpen(true)
+    }
+  }
+
+  const handleSaveRuleConfig = async (ruleType: RuleType, enabled: boolean, config: any) => {
+    await updateRule(ruleType, enabled, config)
+  }
 
   return (
     <div className="w-full">
-      {/* Tabs */}
-      <div className="flex border-b border-gray-200 mb-8 overflow-x-auto no-scrollbar">
-        {(['Net Worth Projections', 'Charts', 'Cash Forecast'] as Tab[]).map(tab => {
-          const isActive = tab === activeTab
-          return (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`pb-4 px-1 mr-10 transition-colors relative flex-shrink-0 ${
-                isActive ? 'text-black opacity-100' : 'text-[#1a1a1a] opacity-40 hover:opacity-70'
-              }`}
-            >
-              <span className="font-bold text-[12px] uppercase tracking-[0.12em]">{tab}</span>
-              {isActive && <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-black" />}
-            </button>
-          )
-        })}
+      {/* Save error banner */}
+      {saveError && (
+        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-[4px]">
+          Failed to save rule: {saveError}. Check your connection and try again.
+        </div>
+      )}
+
+      {/* Loading state */}
+      {(!mounted || rulesLoading) && (
+        <div className="min-h-[600px] w-full bg-gray-50 animate-pulse rounded-lg" />
+      )}
+
+      {mounted && !rulesLoading && (
+        <>
+          {/* Tabs with Refresh Button */}
+          <div className="flex items-center justify-between border-b border-gray-200 mb-8">
+        <div className="flex overflow-x-auto no-scrollbar">
+          {(['Net Worth Projections', 'Charts', 'Cash Forecast'] as Tab[]).map((tab) => {
+            const isActive = tab === activeTab
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`pb-4 px-1 mr-10 transition-colors relative flex-shrink-0 ${
+                  isActive ? 'text-black opacity-100' : 'text-[#1a1a1a] opacity-40 hover:opacity-70'
+                }`}
+              >
+                <span className="font-bold text-[12px] uppercase tracking-[0.12em]">{tab}</span>
+                {isActive && <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-black" />}
+              </button>
+            )
+          })}
+        </div>
+        <button
+          onClick={refreshRules}
+          className="text-gray-400 hover:text-gray-700 transition-colors flex-shrink-0"
+          title="Refresh rules and recalculate"
+        >
+          <RotateCw className="w-4 h-4" />
+        </button>
       </div>
 
       {activeTab === 'Net Worth Projections' && (
@@ -590,11 +856,14 @@ export function FastForwardContent({
               deltaPct={((m1.netWorth - initialNetWorth) / Math.max(1, initialNetWorth)) * 100}
               assets={m1.assets}
               debts={m1.debts}
-              income={enabledRules.income ? monthlyIncome : 0}
-              expenses={enabledRules.expense ? monthlyExpense : 0}
+              income={m1.income}
+              expenses={m1.expenses}
               fmt={fmt}
               fmtDelta={fmtDelta}
-              onClick={() => { setDetailMonths(1); setDetailLabel('Next Month') }}
+              onClick={() => {
+                setDetailMonths(1)
+                setDetailLabel('Next Month')
+              }}
             />
             <ProjectionCard
               label="01 YEAR"
@@ -607,7 +876,10 @@ export function FastForwardContent({
               expenses={y1.expenses}
               fmt={fmt}
               fmtDelta={fmtDelta}
-              onClick={() => { setDetailMonths(12); setDetailLabel('Next Year') }}
+              onClick={() => {
+                setDetailMonths(12)
+                setDetailLabel('Next Year')
+              }}
             />
           </div>
 
@@ -621,7 +893,10 @@ export function FastForwardContent({
               deltaPct={((y5.netWorth - initialNetWorth) / Math.max(1, initialNetWorth)) * 100}
               fmtCompact={fmtCompact}
               fmtDelta={fmtDelta}
-              onClick={() => { setDetailMonths(60); setDetailLabel('In 5 Years') }}
+              onClick={() => {
+                setDetailMonths(60)
+                setDetailLabel('In 5 Years')
+              }}
             />
             <MiniProjectionCard
               years={10}
@@ -631,7 +906,10 @@ export function FastForwardContent({
               deltaPct={((y10.netWorth - initialNetWorth) / Math.max(1, initialNetWorth)) * 100}
               fmtCompact={fmtCompact}
               fmtDelta={fmtDelta}
-              onClick={() => { setDetailMonths(120); setDetailLabel('In 10 Years') }}
+              onClick={() => {
+                setDetailMonths(120)
+                setDetailLabel('In 10 Years')
+              }}
             />
             <MiniProjectionCard
               years={20}
@@ -641,13 +919,19 @@ export function FastForwardContent({
               deltaPct={((y20.netWorth - initialNetWorth) / Math.max(1, initialNetWorth)) * 100}
               fmtCompact={fmtCompact}
               fmtDelta={fmtDelta}
-              onClick={() => { setDetailMonths(240); setDetailLabel('In 20 Years') }}
+              onClick={() => {
+                setDetailMonths(240)
+                setDetailLabel('In 20 Years')
+              }}
             />
           </div>
 
           <ScenarioRulesBlock
-            rules={rules}
-            toggle={(k) => toggle(k as keyof typeof enabledRules)}
+            rules={displayRules}
+            toggle={(k) => toggle(k)}
+            onEditRule={(ruleType) => handleEditRule(ruleType as RuleType)}
+            onRemoveRule={removeExtraRule}
+            onAddRule={(type, desc, amount) => addExtraRule(type, desc, amount)}
             summary={fmtCompact(y20.netWorth).replace('Million', 'M')}
           />
         </div>
@@ -693,17 +977,17 @@ export function FastForwardContent({
                   axisLine={false}
                   tickLine={false}
                   tick={{ fontSize: 10, fontWeight: 700, fill: '#9ca3af' }}
-                  tickFormatter={m => `${m / 12}Y`}
+                  tickFormatter={(m) => `${m / 12}Y`}
                 />
                 <YAxis
                   axisLine={false}
                   tickLine={false}
                   tick={{ fontSize: 10, fontWeight: 700, fill: '#9ca3af' }}
-                  tickFormatter={val => `${sym}${(val / 1000).toFixed(0)}k`}
+                  tickFormatter={(val) => `${sym}${(val / 1000).toFixed(0)}k`}
                 />
                 <ReTooltip
                   formatter={(val) => fmt(Number(val))}
-                  labelFormatter={m => `Month ${m}`}
+                  labelFormatter={(m) => `Month ${m}`}
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
                 />
                 <Line type="monotone" dataKey="netWorth" stroke="#a855f7" strokeWidth={3} dot={false} activeDot={{ r: 6, strokeWidth: 0 }} />
@@ -712,8 +996,11 @@ export function FastForwardContent({
           </div>
 
           <ScenarioRulesBlock
-            rules={rules}
-            toggle={(k) => toggle(k as keyof typeof enabledRules)}
+            rules={displayRules}
+            toggle={(k) => toggle(k)}
+            onEditRule={(ruleType) => handleEditRule(ruleType as RuleType)}
+            onRemoveRule={removeExtraRule}
+            onAddRule={(type, desc, amount) => addExtraRule(type, desc, amount)}
             summary={fmtCompact(y20.netWorth).replace('Million', 'M')}
           />
         </div>
@@ -723,10 +1010,7 @@ export function FastForwardContent({
         <div className="animate-in fade-in duration-300">
           {/* Period header with dropdown */}
           <div className="relative mb-6">
-            <button
-              onClick={() => setPeriodOpen(v => !v)}
-              className="flex items-baseline gap-3 group"
-            >
+            <button onClick={() => setPeriodOpen((v) => !v)} className="flex items-baseline gap-3 group">
               <h2 className="text-[24px] font-bold text-[#1a1a1a]">{periodLabel}</h2>
               <span className="text-[13px] text-gray-500 group-hover:text-gray-700">
                 {forecastPeriod === '1M' && '1 Month'}
@@ -738,7 +1022,7 @@ export function FastForwardContent({
             </button>
             {periodOpen && (
               <div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-[4px] shadow-lg z-10 min-w-[260px] py-1">
-                {periodOptions.map(opt => (
+                {periodOptions.map((opt) => (
                   <button
                     key={opt.key}
                     onClick={() => {
@@ -789,10 +1073,11 @@ export function FastForwardContent({
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => {
-                const isCustom = r.key.startsWith('custom-')
+              {rows.map((r) => {
+                const isExtra = r.key.includes(':extra-')
                 const isOpening = r.key === 'opening'
-                const balance = (r as LedgerRow & { balance: number }).balance
+                const balance = r.balance ?? 0
+                const extraId = isExtra ? r.key.split(':extra-')[1]?.split('-')[0] : null
                 return (
                   <tr key={r.key} className="border-b border-gray-50 hover:bg-gray-50/50 group">
                     <td className="py-3 text-gray-500 whitespace-nowrap">
@@ -803,11 +1088,10 @@ export function FastForwardContent({
                         <input
                           type="text"
                           value={r.description}
-                          onChange={e =>
-                            isCustom
-                              ? updateCustomRow(r.key, { description: e.target.value })
-                              : updateRow(r.key, { description: e.target.value })
-                          }
+                          onChange={(e) => {
+                            updateRow(r.key, { description: e.target.value })
+                            if (extraId) updateExtraRule(extraId, { description: e.target.value })
+                          }}
                           className="bg-transparent focus:outline-none focus:border-b focus:border-blue-400 w-full"
                         />
                       ) : (
@@ -819,11 +1103,10 @@ export function FastForwardContent({
                         <input
                           type="number"
                           value={r.inflow || ''}
-                          onChange={e =>
-                            isCustom
-                              ? updateCustomRow(r.key, { inflow: Number(e.target.value) })
-                              : updateRow(r.key, { inflow: Number(e.target.value) })
-                          }
+                          onChange={(e) => {
+                            updateRow(r.key, { inflow: Number(e.target.value) })
+                            if (extraId && r.inflow >= 0) updateExtraRule(extraId, { amount: Number(e.target.value) })
+                          }}
                           placeholder="—"
                           className="bg-transparent focus:outline-none focus:border-b focus:border-blue-400 text-right w-24 text-[#1a1a1a]"
                         />
@@ -836,11 +1119,10 @@ export function FastForwardContent({
                         <input
                           type="number"
                           value={r.outflow || ''}
-                          onChange={e =>
-                            isCustom
-                              ? updateCustomRow(r.key, { outflow: Number(e.target.value) })
-                              : updateRow(r.key, { outflow: Number(e.target.value) })
-                          }
+                          onChange={(e) => {
+                            updateRow(r.key, { outflow: Number(e.target.value) })
+                            if (extraId && r.outflow >= 0) updateExtraRule(extraId, { amount: Number(e.target.value) })
+                          }}
                           placeholder="—"
                           className="bg-transparent focus:outline-none focus:border-b focus:border-blue-400 text-right w-24 text-[#1a1a1a]"
                         />
@@ -850,9 +1132,9 @@ export function FastForwardContent({
                     </td>
                     <td className={`py-3 text-right ${isOpening ? 'text-[#1a1a1a]' : 'font-medium text-[#1a1a1a]'}`}>
                       {fmt(balance)}
-                      {isCustom && (
+                      {isExtra && extraId && (
                         <button
-                          onClick={() => removeCustomRow(r.key)}
+                          onClick={() => removeExtraRule(extraId)}
                           className="ml-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                           aria-label="Remove"
                         >
@@ -869,7 +1151,7 @@ export function FastForwardContent({
                   {new Date(
                     start.getFullYear(),
                     start.getMonth() + monthsForPeriod(forecastPeriod) - 1,
-                    1,
+                    1
                   ).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                 </td>
                 <td className="py-3 font-bold text-[#1a1a1a]">Closing Balance</td>
@@ -882,7 +1164,7 @@ export function FastForwardContent({
 
           {/* Add row button */}
           <button
-            onClick={addCustomRow}
+            onClick={() => addExtraRule('income', 'New entry', 0)}
             className="mt-3 flex items-center gap-2 text-[11px] font-bold text-blue-500 hover:text-blue-600 uppercase tracking-[0.15em]"
           >
             <Plus className="w-3 h-3" /> Add Row
@@ -905,33 +1187,36 @@ export function FastForwardContent({
           label={detailLabel}
           startDate={start}
           breakdown={computeBreakdown(detailMonths)}
-          cashGrowthPct={cashGrowth}
-          investableGrowthPct={investableGrowth}
-          monthlyIncome={monthlyIncome}
-          incomeYearlyBump={incomeYearlyBump}
-          monthlyExpense={monthlyExpense}
-          enabledRules={enabledRules}
           sym={sym}
           fmt={fmt}
           fmtDelta={fmtDelta}
           onClose={() => setDetailMonths(null)}
         />
       )}
+
+      {/* Rule Config Modal */}
+      <RuleConfigModal
+        isOpen={modalOpen}
+        rule={editingRule}
+        onClose={() => {
+          setModalOpen(false)
+          setEditingRule(null)
+        }}
+        onSave={handleSaveRuleConfig}
+      />
+        </>
+      )}
     </div>
   )
 }
+
+// ... [Component helper functions below] ...
 
 function ProjectionDetailsModal({
   months,
   label,
   startDate,
   breakdown,
-  cashGrowthPct,
-  investableGrowthPct,
-  monthlyIncome,
-  incomeYearlyBump,
-  monthlyExpense,
-  enabledRules,
   sym,
   fmt,
   fmtDelta,
@@ -940,13 +1225,7 @@ function ProjectionDetailsModal({
   months: number
   label: string
   startDate: Date
-  breakdown: ReturnType<FastForwardContentCtx['computeBreakdown']>
-  cashGrowthPct: number
-  investableGrowthPct: number
-  monthlyIncome: number
-  incomeYearlyBump: number
-  monthlyExpense: number
-  enabledRules: { cash: boolean; investable: boolean; income: boolean; expense: boolean; inflation: boolean }
+  breakdown: BreakdownResult
   sym: string
   fmt: (v: number) => string
   fmtDelta: (v: number) => string
@@ -973,7 +1252,7 @@ function ProjectionDetailsModal({
     >
       <div
         className="bg-white rounded-[6px] shadow-xl w-full max-w-[540px] mt-16 mb-16 p-8 relative animate-in fade-in zoom-in-95 duration-200"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={onClose}
@@ -1003,7 +1282,7 @@ function ProjectionDetailsModal({
           {/* Cash group */}
           <div className="border-b border-gray-200">
             <button
-              onClick={() => setCashOpen(v => !v)}
+              onClick={() => setCashOpen((v) => !v)}
               className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50"
             >
               <div className="flex items-center gap-2 text-[14px] font-bold">
@@ -1019,26 +1298,17 @@ function ProjectionDetailsModal({
             </button>
             {cashOpen && (
               <div className="bg-gray-50/60 text-[13px]">
-                {enabledRules.income && (
-                  <DetailRow
-                    text={`Income of ${currencyCode} ${monthlyIncome.toLocaleString('de-DE')} from Salary. Repeats every month. Revised to +${incomeYearlyBump}% every year in Jan`}
-                    delta={fmtDelta(breakdown.totalIncome)}
-                    positive
-                  />
-                )}
-                {enabledRules.expense && (
-                  <DetailRow
-                    text={`Expense of ${currencyCode} ${monthlyExpense.toLocaleString('de-DE')} towards Expenses. Repeats every month`}
-                    delta={fmtDelta(-breakdown.totalExpense)}
-                  />
-                )}
-                {enabledRules.cash && (
-                  <DetailRow
-                    text={`Value of Cash to change by ${cashGrowthPct}% per year`}
-                    delta={fmtDelta(breakdown.totalCashGrowth)}
-                    positive={breakdown.totalCashGrowth >= 0}
-                  />
-                )}
+                <DetailRow
+                  text={`Income from Salary`}
+                  delta={fmtDelta(breakdown.totalIncome)}
+                  positive
+                />
+                <DetailRow text={`Expenses`} delta={fmtDelta(-breakdown.totalExpense)} />
+                <DetailRow
+                  text={`Cash growth`}
+                  delta={fmtDelta(breakdown.totalCashGrowth)}
+                  positive={breakdown.totalCashGrowth >= 0}
+                />
               </div>
             )}
           </div>
@@ -1046,7 +1316,7 @@ function ProjectionDetailsModal({
           {/* Investable group */}
           <div className="border-b border-gray-200">
             <button
-              onClick={() => setInvOpen(v => !v)}
+              onClick={() => setInvOpen((v) => !v)}
               className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50"
             >
               <div className="flex items-center gap-2 text-[14px] font-bold">
@@ -1067,13 +1337,11 @@ function ProjectionDetailsModal({
                   delta=""
                   trailing={fmt(breakdown.investableOpening)}
                 />
-                {enabledRules.investable && (
-                  <DetailRow
-                    text={`Value of Investable Assets to change by ${investableGrowthPct}% per year`}
-                    delta={fmtDelta(breakdown.totalInvGrowth)}
-                    positive={breakdown.totalInvGrowth >= 0}
-                  />
-                )}
+                <DetailRow
+                  text={`Investable growth`}
+                  delta={fmtDelta(breakdown.totalInvGrowth)}
+                  positive={breakdown.totalInvGrowth >= 0}
+                />
               </div>
             )}
           </div>
@@ -1100,24 +1368,6 @@ function ProjectionDetailsModal({
       </div>
     </div>
   )
-}
-
-type FastForwardContentCtx = {
-  computeBreakdown: (months: number) => {
-    cashOpening: number
-    investableOpening: number
-    debts: number
-    totalIncome: number
-    totalExpense: number
-    totalCashGrowth: number
-    totalInvGrowth: number
-    cashEnd: number
-    invEnd: number
-    assetsEnd: number
-    netWorthEnd: number
-    netWorthStart: number
-    assetsStart: number
-  }
 }
 
 function DetailRow({
@@ -1170,9 +1420,7 @@ function ProjectionCard(props: {
       <div className="text-[11px] font-medium text-gray-500 mb-1">Net Worth</div>
       <div className="flex items-baseline gap-1 mb-1">
         <span className="text-[14px] font-bold">{fmt(netWorth).slice(0, 1)}</span>
-        <span className="text-[28px] font-bold tracking-tight text-[#1a1a1a]">
-          {fmt(netWorth).slice(2)}
-        </span>
+        <span className="text-[28px] font-bold tracking-tight text-[#1a1a1a]">{fmt(netWorth).slice(2)}</span>
       </div>
       <div className={`text-[12px] font-bold mb-5 ${positive ? 'text-green-600' : 'text-red-500'}`}>
         {fmtDelta(deltaAbs)} ({positive ? '+' : ''}
@@ -1247,12 +1495,38 @@ function MiniProjectionCard(props: {
 function ScenarioRulesBlock({
   rules,
   toggle,
+  onEditRule,
+  onRemoveRule,
+  onAddRule,
   summary,
 }: {
   rules: Rule[]
   toggle: (key: string) => void
+  onEditRule: (ruleType: string) => void
+  onRemoveRule: (id: string) => void
+  onAddRule: (type: 'income' | 'expense', desc: string, amount: number) => void
   summary: string
 }) {
+  const [formOpen, setFormOpen] = useState(false)
+  const [ruleType, setRuleType] = useState<'income' | 'expense'>('income')
+  const [ruleDesc, setRuleDesc] = useState('')
+  const [ruleAmount, setRuleAmount] = useState<number>(0)
+
+  const handleAdd = () => {
+    if (!ruleDesc.trim() && ruleAmount === 0) {
+      setFormOpen(false)
+      return
+    }
+    onAddRule(
+      ruleType,
+      ruleDesc.trim() || (ruleType === 'income' ? 'New Income' : 'New Expense'),
+      ruleAmount
+    )
+    setRuleDesc('')
+    setRuleAmount(0)
+    setFormOpen(false)
+  }
+
   return (
     <>
       <div className="mb-2 flex items-center gap-4">
@@ -1270,23 +1544,82 @@ function ScenarioRulesBlock({
           Rules
         </div>
         <div className="divide-y divide-gray-100">
-          {rules.map(rule => (
+          {rules.map((rule) => (
             <div key={rule.id} className="flex items-center justify-between px-6 py-4 group">
-              <div className={`text-[14px] ${rule.enabled ? 'text-[#1a1a1a]' : 'text-gray-400'}`}>
+              <div className={`text-[14px] flex-1 min-w-0 ${rule.enabled ? 'text-[#1a1a1a]' : 'text-gray-400'}`}>
                 {rule.render()}
               </div>
               <div className="flex items-center gap-3 ml-4 flex-shrink-0">
                 <Toggle on={rule.enabled} onClick={() => toggle(rule.id)} />
-                <button className="text-gray-300 hover:text-gray-600">
-                  <MoreHorizontal className="w-4 h-4" />
-                </button>
+                {rule.isExtra && rule.extraId ? (
+                  <button
+                    onClick={() => onRemoveRule(rule.extraId!)}
+                    className="text-gray-300 hover:text-red-500 transition-colors"
+                    title="Remove rule"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onEditRule(rule.id)}
+                    className="text-gray-300 hover:text-gray-600"
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
         </div>
-        <button className="w-full text-left px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-[0.15em] hover:text-blue-500 transition-colors border-t border-gray-100">
-          Add Rule
-        </button>
+
+        {formOpen ? (
+          <div className="px-6 py-4 border-t border-gray-100 flex flex-wrap items-center gap-3">
+            <select
+              value={ruleType}
+              onChange={(e) => setRuleType(e.target.value as 'income' | 'expense')}
+              className="text-[13px] border border-gray-300 px-2 py-1 focus:outline-none focus:border-black"
+            >
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+            </select>
+            <input
+              autoFocus
+              type="text"
+              placeholder="Description"
+              value={ruleDesc}
+              onChange={(e) => setRuleDesc(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAdd()
+                if (e.key === 'Escape') setFormOpen(false)
+              }}
+              className="text-[13px] border-b border-gray-400 focus:outline-none focus:border-black bg-transparent w-40 py-1"
+            />
+            <input
+              type="number"
+              placeholder="Amount"
+              value={ruleAmount || ''}
+              onChange={(e) => setRuleAmount(Number(e.target.value))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAdd()
+                if (e.key === 'Escape') setFormOpen(false)
+              }}
+              className="text-[13px] border-b border-gray-400 focus:outline-none focus:border-black bg-transparent w-24 py-1"
+            />
+            <button onClick={handleAdd} className="text-[11px] font-bold text-blue-500 hover:text-blue-600 uppercase tracking-[0.1em]">
+              Add
+            </button>
+            <button onClick={() => setFormOpen(false)} className="text-gray-400 hover:text-gray-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setFormOpen(true)}
+            className="w-full text-left px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-[0.15em] hover:text-blue-500 transition-colors border-t border-gray-100"
+          >
+            Add Rule
+          </button>
+        )}
       </div>
     </>
   )
@@ -1328,26 +1661,3 @@ function EditLink({ children }: { children: React.ReactNode }) {
     </span>
   )
 }
-
-function EditValue({
-  value,
-  onChange,
-  suffix,
-}: {
-  value: number
-  onChange: (v: number) => void
-  suffix: string
-}) {
-  return (
-    <span className="inline-flex items-center gap-1">
-      <input
-        type="number"
-        value={value}
-        onChange={e => onChange(Number(e.target.value))}
-        className="w-12 text-blue-500 bg-transparent border-b border-dotted border-blue-400 focus:outline-none focus:border-blue-600 text-[14px]"
-      />
-      <span className="text-blue-500">{suffix}</span>
-    </span>
-  )
-}
-

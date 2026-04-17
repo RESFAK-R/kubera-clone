@@ -20,6 +20,7 @@ import {
   IncomeRuleConfig,
   ExpenseRuleConfig,
   CashGrowthRuleConfig,
+  ExtraEntry,
 } from '@/types/rules'
 import {
   applyIncomeRule,
@@ -45,16 +46,10 @@ type Rule = {
   enabled: boolean
   isExtra?: boolean
   extraId?: string
+  extraType?: 'income' | 'expense'
   render: () => React.ReactNode
 }
 
-type ExtraRule = {
-  id: string
-  type: 'income' | 'expense'
-  description: string
-  amount: number
-  enabled: boolean
-}
 
 type LedgerRow = {
   key: string
@@ -123,50 +118,75 @@ export function FastForwardContent({
   const [periodOpen, setPeriodOpen] = useState(false)
   const [rowOverrides, setRowOverrides] = useState<Record<string, { inflow?: number; outflow?: number; description?: string }>>({})
 
-  // Extra rules (custom income/expense on top of base rules)
-  const LS_EXTRA_KEY = 'kubera_extra_rules'
-  const loadExtraRules = () => {
-    if (typeof window === 'undefined') return []
-    try {
-      return JSON.parse(localStorage.getItem(LS_EXTRA_KEY) ?? '[]')
-    } catch {
-      return []
-    }
-  }
-
-  const [extraRules, setExtraRulesRaw] = useState<ExtraRule[]>(loadExtraRules())
-  const setExtraRules = (updater: ExtraRule[] | ((prev: ExtraRule[]) => ExtraRule[])) => {
-    setExtraRulesRaw((prev) => {
-      const next = typeof updater === 'function' ? updater(prev) : updater
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LS_EXTRA_KEY, JSON.stringify(next))
-      }
-      return next
-    })
-  }
-
-  const addExtraRule = (type: 'income' | 'expense' = 'income', desc = 'New entry', amount = 0) => {
-    const rule: ExtraRule = { id: crypto.randomUUID(), type, description: desc, amount, enabled: true }
-    setExtraRules((prev) => [...prev, rule])
-  }
-
-  const updateExtraRule = (id: string, patch: Partial<ExtraRule>) => {
-    setExtraRules((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)))
-  }
-
-  const removeExtraRule = (id: string) => {
-    setExtraRules((prev) => prev.filter((r) => r.id !== id))
-  }
-
-  const toggleExtraRule = (id: string) => {
-    setExtraRules((prev) => prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)))
-  }
-
-  // Get enabled rules
+  // Rules from DB
   const incomeRule = getRule('income')
   const expenseRule = getRule('expense')
   const cashRule = getRule('cash')
   const investableRule = getRule('investable')
+
+  // Extra entries are stored inside income/expense rule config (persisted to Supabase via updateRule)
+  const incomeConfig = incomeRule?.config as IncomeRuleConfig | undefined
+  const expenseConfig = expenseRule?.config as ExpenseRuleConfig | undefined
+  const extraIncomeEntries: ExtraEntry[] = incomeConfig?.extra_entries ?? []
+  const extraExpenseEntries: ExtraEntry[] = expenseConfig?.extra_entries ?? []
+
+  const addExtraEntry = async (type: 'income' | 'expense') => {
+    const newEntry: ExtraEntry = {
+      id: crypto.randomUUID(),
+      description: type === 'income' ? 'New Income' : 'New Expense',
+      amount: 0,
+      enabled: true,
+    }
+    if (type === 'income' && incomeRule) {
+      const cfg = incomeRule.config as IncomeRuleConfig
+      await updateRule('income', incomeRule.enabled, {
+        ...cfg,
+        extra_entries: [...(cfg.extra_entries ?? []), newEntry],
+      })
+    } else if (type === 'expense' && expenseRule) {
+      const cfg = expenseRule.config as ExpenseRuleConfig
+      await updateRule('expense', expenseRule.enabled, {
+        ...cfg,
+        extra_entries: [...(cfg.extra_entries ?? []), newEntry],
+      })
+    }
+  }
+
+  const updateExtraEntry = async (
+    type: 'income' | 'expense',
+    id: string,
+    patch: Partial<ExtraEntry>,
+  ) => {
+    if (type === 'income' && incomeRule) {
+      const cfg = incomeRule.config as IncomeRuleConfig
+      await updateRule('income', incomeRule.enabled, {
+        ...cfg,
+        extra_entries: (cfg.extra_entries ?? []).map((e) => (e.id === id ? { ...e, ...patch } : e)),
+      })
+    } else if (type === 'expense' && expenseRule) {
+      const cfg = expenseRule.config as ExpenseRuleConfig
+      await updateRule('expense', expenseRule.enabled, {
+        ...cfg,
+        extra_entries: (cfg.extra_entries ?? []).map((e) => (e.id === id ? { ...e, ...patch } : e)),
+      })
+    }
+  }
+
+  const removeExtraEntry = async (type: 'income' | 'expense', id: string) => {
+    if (type === 'income' && incomeRule) {
+      const cfg = incomeRule.config as IncomeRuleConfig
+      await updateRule('income', incomeRule.enabled, {
+        ...cfg,
+        extra_entries: (cfg.extra_entries ?? []).filter((e) => e.id !== id),
+      })
+    } else if (type === 'expense' && expenseRule) {
+      const cfg = expenseRule.config as ExpenseRuleConfig
+      await updateRule('expense', expenseRule.enabled, {
+        ...cfg,
+        extra_entries: (cfg.extra_entries ?? []).filter((e) => e.id !== id),
+      })
+    }
+  }
 
   const monthsForPeriod = (p: ForecastPeriod) => {
     const now = new Date()
@@ -291,21 +311,35 @@ export function FastForwardContent({
         }
       }
 
-      // Extra rules rows
-      for (const er of extraRules) {
+      // Extra income entries (from income rule config)
+      for (const er of extraIncomeEntries) {
         if (!er.enabled) continue
-        const key = `${year}-${monthIndex}:extra-${er.id}`
+        const key = `${year}-${monthIndex}:extra-inc-${er.id}`
         const ovr = rowOverrides[key]
         list.push({
           key,
           date: d,
           description: ovr?.description ?? er.description,
-          inflow: er.type === 'income' ? (ovr?.inflow ?? er.amount) : 0,
-          outflow: er.type === 'expense' ? (ovr?.outflow ?? er.amount) : 0,
+          inflow: ovr?.inflow ?? er.amount,
+          outflow: 0,
           editable: true,
         })
-        if (er.type === 'income') cashPool += ovr?.inflow ?? er.amount
-        if (er.type === 'expense') cashPool -= ovr?.outflow ?? er.amount
+        cashPool += ovr?.inflow ?? er.amount
+      }
+      // Extra expense entries (from expense rule config)
+      for (const er of extraExpenseEntries) {
+        if (!er.enabled) continue
+        const key = `${year}-${monthIndex}:extra-exp-${er.id}`
+        const ovr = rowOverrides[key]
+        list.push({
+          key,
+          date: d,
+          description: ovr?.description ?? er.description,
+          inflow: 0,
+          outflow: ovr?.outflow ?? er.amount,
+          editable: true,
+        })
+        cashPool -= ovr?.outflow ?? er.amount
       }
     }
 
@@ -332,7 +366,8 @@ export function FastForwardContent({
     expenseRule,
     cashRule,
     rowOverrides,
-    extraRules,
+    extraIncomeEntries,
+    extraExpenseEntries,
   ])
 
   // Projection calculations using rule engine
@@ -361,11 +396,11 @@ export function FastForwardContent({
     let cumIncome = 0
     let cumExpense = 0
 
-    const extraIncome = extraRules
-      .filter((r) => r.enabled && r.type === 'income')
+    const extraIncome = extraIncomeEntries
+      .filter((r) => r.enabled)
       .reduce((s, r) => s + r.amount, 0)
-    const extraExpense = extraRules
-      .filter((r) => r.enabled && r.type === 'expense')
+    const extraExpense = extraExpenseEntries
+      .filter((r) => r.enabled)
       .reduce((s, r) => s + r.amount, 0)
 
     for (let m = 1; m <= months; m++) {
@@ -418,7 +453,8 @@ export function FastForwardContent({
     expenseRule,
     cashRule,
     investableRule,
-    extraRules,
+    extraIncomeEntries,
+    extraExpenseEntries,
   ])
 
   const computeBreakdown = (months: number) => {
@@ -459,11 +495,11 @@ export function FastForwardContent({
     let cash = cashStart
     let investable = investableStart
 
-    const extraIncome = extraRules
-      .filter((r) => r.enabled && r.type === 'income')
+    const extraIncome = extraIncomeEntries
+      .filter((r) => r.enabled)
       .reduce((s, r) => s + r.amount, 0)
-    const extraExpense = extraRules
-      .filter((r) => r.enabled && r.type === 'expense')
+    const extraExpense = extraExpenseEntries
+      .filter((r) => r.enabled)
       .reduce((s, r) => s + r.amount, 0)
 
     for (let m = 1; m <= months; m++) {
@@ -753,39 +789,64 @@ export function FastForwardContent({
         )
       },
     },
-    ...extraRules.map((er) => ({
-      id: `extra-${er.id}`,
+    ...extraIncomeEntries.map((er) => ({
+      id: `extra-inc-${er.id}`,
       enabled: er.enabled,
       isExtra: true,
       extraId: er.id,
+      extraType: 'income' as const,
       render: () => (
         <>
-          {er.type === 'income' ? 'Income' : 'Expense'} of{' '}
-          <EditLink>{sym === '€' ? 'EUR' : 'USD'}</EditLink>{' '}
+          Income of <EditLink>{sym === '€' ? 'EUR' : 'USD'}</EditLink>{' '}
           <span className="text-blue-500">{er.amount.toLocaleString('de-DE')}</span> from{' '}
           <span
             contentEditable
             suppressContentEditableWarning
-            onBlur={(e) => updateExtraRule(er.id, { description: e.currentTarget.textContent ?? er.description })}
+            onBlur={(e) =>
+              updateExtraEntry('income', er.id, { description: e.currentTarget.textContent ?? er.description })
+            }
             className="text-blue-500 underline decoration-dotted underline-offset-2 cursor-text focus:outline-none"
           >
             {er.description}
           </span>
-          . Repeats <EditLink>every month</EditLink>
+          . Repeats every month
+        </>
+      ),
+    })),
+    ...extraExpenseEntries.map((er) => ({
+      id: `extra-exp-${er.id}`,
+      enabled: er.enabled,
+      isExtra: true,
+      extraId: er.id,
+      extraType: 'expense' as const,
+      render: () => (
+        <>
+          Expense of <EditLink>{sym === '€' ? 'EUR' : 'USD'}</EditLink>{' '}
+          <span className="text-blue-500">{er.amount.toLocaleString('de-DE')}</span> for{' '}
+          <span
+            contentEditable
+            suppressContentEditableWarning
+            onBlur={(e) =>
+              updateExtraEntry('expense', er.id, { description: e.currentTarget.textContent ?? er.description })
+            }
+            className="text-blue-500 underline decoration-dotted underline-offset-2 cursor-text focus:outline-none"
+          >
+            {er.description}
+          </span>
+          . Repeats every month
         </>
       ),
     })),
   ]
 
   const toggle = (key: string) => {
-    if (key.startsWith('extra-')) {
-      toggleExtraRule(key.replace('extra-', ''))
+    const displayRule = displayRules.find((r) => r.id === key)
+    if (displayRule?.isExtra && displayRule.extraId && displayRule.extraType) {
+      updateExtraEntry(displayRule.extraType, displayRule.extraId, { enabled: !displayRule.enabled })
     } else {
       const ruleType = key as RuleType
       const rule = getRule(ruleType)
-      if (rule) {
-        updateRule(ruleType, !rule.enabled, rule.config)
-      }
+      if (rule) updateRule(ruleType, !rule.enabled, rule.config)
     }
   }
 
@@ -930,8 +991,11 @@ export function FastForwardContent({
             rules={displayRules}
             toggle={(k) => toggle(k)}
             onEditRule={(ruleType) => handleEditRule(ruleType as RuleType)}
-            onRemoveRule={removeExtraRule}
-            onAddRule={(type, desc, amount) => addExtraRule(type, desc, amount)}
+            onRemoveRule={(id) => {
+              const rule = displayRules.find((r) => r.extraId === id)
+              if (rule?.extraType) removeExtraEntry(rule.extraType, id)
+            }}
+            onAddRule={(type) => addExtraEntry(type)}
             summary={fmtCompact(y20.netWorth).replace('Million', 'M')}
           />
         </div>
@@ -999,8 +1063,11 @@ export function FastForwardContent({
             rules={displayRules}
             toggle={(k) => toggle(k)}
             onEditRule={(ruleType) => handleEditRule(ruleType as RuleType)}
-            onRemoveRule={removeExtraRule}
-            onAddRule={(type, desc, amount) => addExtraRule(type, desc, amount)}
+            onRemoveRule={(id) => {
+              const rule = displayRules.find((r) => r.extraId === id)
+              if (rule?.extraType) removeExtraEntry(rule.extraType, id)
+            }}
+            onAddRule={(type) => addExtraEntry(type)}
             summary={fmtCompact(y20.netWorth).replace('Million', 'M')}
           />
         </div>
@@ -1074,10 +1141,14 @@ export function FastForwardContent({
             </thead>
             <tbody>
               {rows.map((r) => {
-                const isExtra = r.key.includes(':extra-')
+                const isExtra = r.key.includes(':extra-inc-') || r.key.includes(':extra-exp-')
                 const isOpening = r.key === 'opening'
                 const balance = r.balance ?? 0
-                const extraId = isExtra ? r.key.split(':extra-')[1]?.split('-')[0] : null
+                const extraIsIncome = r.key.includes(':extra-inc-')
+                const extraType = extraIsIncome ? 'income' : 'expense'
+                const extraId = isExtra
+                  ? r.key.split(extraIsIncome ? ':extra-inc-' : ':extra-exp-')[1] ?? null
+                  : null
                 return (
                   <tr key={r.key} className="border-b border-gray-50 hover:bg-gray-50/50 group">
                     <td className="py-3 text-gray-500 whitespace-nowrap">
@@ -1090,7 +1161,7 @@ export function FastForwardContent({
                           value={r.description}
                           onChange={(e) => {
                             updateRow(r.key, { description: e.target.value })
-                            if (extraId) updateExtraRule(extraId, { description: e.target.value })
+                            if (extraId) updateExtraEntry(extraType, extraId, { description: e.target.value })
                           }}
                           className="bg-transparent focus:outline-none focus:border-b focus:border-blue-400 w-full"
                         />
@@ -1105,7 +1176,7 @@ export function FastForwardContent({
                           value={r.inflow || ''}
                           onChange={(e) => {
                             updateRow(r.key, { inflow: Number(e.target.value) })
-                            if (extraId && r.inflow >= 0) updateExtraRule(extraId, { amount: Number(e.target.value) })
+                            if (extraId && r.inflow >= 0) updateExtraEntry(extraType, extraId, { amount: Number(e.target.value) })
                           }}
                           placeholder="—"
                           className="bg-transparent focus:outline-none focus:border-b focus:border-blue-400 text-right w-24 text-[#1a1a1a]"
@@ -1121,7 +1192,7 @@ export function FastForwardContent({
                           value={r.outflow || ''}
                           onChange={(e) => {
                             updateRow(r.key, { outflow: Number(e.target.value) })
-                            if (extraId && r.outflow >= 0) updateExtraRule(extraId, { amount: Number(e.target.value) })
+                            if (extraId && r.outflow >= 0) updateExtraEntry(extraType, extraId, { amount: Number(e.target.value) })
                           }}
                           placeholder="—"
                           className="bg-transparent focus:outline-none focus:border-b focus:border-blue-400 text-right w-24 text-[#1a1a1a]"
@@ -1134,7 +1205,7 @@ export function FastForwardContent({
                       {fmt(balance)}
                       {isExtra && extraId && (
                         <button
-                          onClick={() => removeExtraRule(extraId)}
+                          onClick={() => removeExtraEntry(extraType, extraId)}
                           className="ml-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                           aria-label="Remove"
                         >
@@ -1164,7 +1235,7 @@ export function FastForwardContent({
 
           {/* Add row button */}
           <button
-            onClick={() => addExtraRule('income', 'New entry', 0)}
+            onClick={() => addExtraEntry('income')}
             className="mt-3 flex items-center gap-2 text-[11px] font-bold text-blue-500 hover:text-blue-600 uppercase tracking-[0.15em]"
           >
             <Plus className="w-3 h-3" /> Add Row
@@ -1504,26 +1575,14 @@ function ScenarioRulesBlock({
   toggle: (key: string) => void
   onEditRule: (ruleType: string) => void
   onRemoveRule: (id: string) => void
-  onAddRule: (type: 'income' | 'expense', desc: string, amount: number) => void
+  onAddRule: (type: 'income' | 'expense') => void
   summary: string
 }) {
   const [formOpen, setFormOpen] = useState(false)
   const [ruleType, setRuleType] = useState<'income' | 'expense'>('income')
-  const [ruleDesc, setRuleDesc] = useState('')
-  const [ruleAmount, setRuleAmount] = useState<number>(0)
 
   const handleAdd = () => {
-    if (!ruleDesc.trim() && ruleAmount === 0) {
-      setFormOpen(false)
-      return
-    }
-    onAddRule(
-      ruleType,
-      ruleDesc.trim() || (ruleType === 'income' ? 'New Income' : 'New Expense'),
-      ruleAmount
-    )
-    setRuleDesc('')
-    setRuleAmount(0)
+    onAddRule(ruleType)
     setFormOpen(false)
   }
 
@@ -1573,38 +1632,15 @@ function ScenarioRulesBlock({
         </div>
 
         {formOpen ? (
-          <div className="px-6 py-4 border-t border-gray-100 flex flex-wrap items-center gap-3">
+          <div className="px-6 py-4 border-t border-gray-100 flex items-center gap-3">
             <select
               value={ruleType}
               onChange={(e) => setRuleType(e.target.value as 'income' | 'expense')}
-              className="text-[13px] border border-gray-300 px-2 py-1 focus:outline-none focus:border-black"
+              className="text-[13px] border border-gray-300 px-2 py-1 focus:outline-none focus:border-black rounded"
             >
               <option value="income">Income</option>
               <option value="expense">Expense</option>
             </select>
-            <input
-              autoFocus
-              type="text"
-              placeholder="Description"
-              value={ruleDesc}
-              onChange={(e) => setRuleDesc(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAdd()
-                if (e.key === 'Escape') setFormOpen(false)
-              }}
-              className="text-[13px] border-b border-gray-400 focus:outline-none focus:border-black bg-transparent w-40 py-1"
-            />
-            <input
-              type="number"
-              placeholder="Amount"
-              value={ruleAmount || ''}
-              onChange={(e) => setRuleAmount(Number(e.target.value))}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAdd()
-                if (e.key === 'Escape') setFormOpen(false)
-              }}
-              className="text-[13px] border-b border-gray-400 focus:outline-none focus:border-black bg-transparent w-24 py-1"
-            />
             <button onClick={handleAdd} className="text-[11px] font-bold text-blue-500 hover:text-blue-600 uppercase tracking-[0.1em]">
               Add
             </button>

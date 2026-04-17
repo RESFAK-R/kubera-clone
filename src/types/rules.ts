@@ -18,23 +18,26 @@ export type RuleConfig = Record<string, unknown>
  * - Active months (can disable certain months)
  * - Extra payments in specific months (13esima, 14esima, etc.)
  */
-export interface IncomeRuleConfig extends RuleConfig {
-  base_monthly: number           // Base monthly income
-  yearly_bump_percent: number    // Percentage increase every year
-  yearly_bump_month: number      // Month index (0=Jan, 11=Dec) when bump applies
-  active_months: boolean[]       // Length 12, true = income paid this month
-  extra_payments?: Record<string, number> // e.g., { 'december': 10000, 'january': 10000 }
+export interface ExtraEntry {
+  id: string
+  description: string
+  amount: number
+  enabled: boolean
 }
 
-/**
- * Expense rule configuration
- * Supports:
- * - Base monthly expense
- * - Active months toggle
- */
+export interface IncomeRuleConfig extends RuleConfig {
+  base_monthly: number
+  yearly_bump_percent: number
+  yearly_bump_month: number
+  active_months: boolean[]
+  extra_payments?: Record<string, number>
+  extra_entries?: ExtraEntry[]   // Additional income sources persisted in config JSONB
+}
+
 export interface ExpenseRuleConfig extends RuleConfig {
   base_monthly: number
-  active_months: boolean[]       // Length 12, true = expense deducted this month
+  active_months: boolean[]
+  extra_entries?: ExtraEntry[]   // Additional expense sources persisted in config JSONB
 }
 
 /**

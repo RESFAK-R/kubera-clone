@@ -10,6 +10,7 @@ import {
   CashGrowthRuleConfig,
   InflationRuleConfig,
   AnyRuleConfig,
+  ExtraEntry,
   DEFAULT_RULE_CONFIGS,
 } from '@/types/rules'
 import { getMonthInfo } from '@/lib/ruleEngine'
@@ -218,7 +219,7 @@ function IncomeRuleForm({
                 onChange={(e) => {
                   const monthKey = monthName.toLowerCase()
                   const val = Number(e.target.value)
-                  const extras = config.extra_payments ?? {}
+                  const extras = { ...(config.extra_payments ?? {}) }
                   if (val > 0) {
                     extras[monthKey] = val
                   } else {
@@ -233,6 +234,11 @@ function IncomeRuleForm({
           ))}
         </div>
       </div>
+
+      <ExtraEntriesEditor
+        entries={config.extra_entries ?? []}
+        onChange={(entries) => onChange({ ...config, extra_entries: entries })}
+      />
     </>
   )
 }
@@ -281,7 +287,83 @@ function ExpenseRuleForm({
           ))}
         </div>
       </div>
+
+      <ExtraEntriesEditor
+        entries={config.extra_entries ?? []}
+        onChange={(entries) => onChange({ ...config, extra_entries: entries })}
+      />
     </>
+  )
+}
+
+/**
+ * Shared extra entries editor — used by both Income and Expense forms.
+ * Each entry is persisted inside the rule's config JSONB.
+ */
+function ExtraEntriesEditor({
+  entries,
+  onChange,
+}: {
+  entries: ExtraEntry[]
+  onChange: (e: ExtraEntry[]) => void
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <label className="text-[12px] font-bold text-gray-600 uppercase">Additional Entries</label>
+        <button
+          type="button"
+          onClick={() =>
+            onChange([
+              ...entries,
+              { id: crypto.randomUUID(), description: 'New Entry', amount: 0, enabled: true },
+            ])
+          }
+          className="text-[11px] font-bold text-blue-500 hover:text-blue-600 uppercase tracking-[0.1em]"
+        >
+          + Add
+        </button>
+      </div>
+      {entries.length === 0 && (
+        <p className="text-[11px] text-gray-400">No additional entries. Click + Add to create one.</p>
+      )}
+      <div className="space-y-2">
+        {entries.map((e) => (
+          <div key={e.id} className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onChange(entries.map((x) => (x.id === e.id ? { ...x, enabled: !x.enabled } : x)))}
+              className={`w-4 h-4 rounded-full border flex-shrink-0 ${e.enabled ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}
+              aria-label="Toggle"
+            />
+            <input
+              type="text"
+              value={e.description}
+              onChange={(ev) =>
+                onChange(entries.map((x) => (x.id === e.id ? { ...x, description: ev.target.value } : x)))
+              }
+              className="flex-1 px-2 py-1 border border-gray-300 rounded text-[12px] focus:outline-none focus:border-blue-500"
+            />
+            <input
+              type="number"
+              value={e.amount}
+              onChange={(ev) =>
+                onChange(entries.map((x) => (x.id === e.id ? { ...x, amount: Number(ev.target.value) } : x)))
+              }
+              className="w-24 px-2 py-1 border border-gray-300 rounded text-[12px] focus:outline-none focus:border-blue-500"
+            />
+            <button
+              type="button"
+              onClick={() => onChange(entries.filter((x) => x.id !== e.id))}
+              className="text-gray-300 hover:text-red-500 transition-colors"
+              aria-label="Remove"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 

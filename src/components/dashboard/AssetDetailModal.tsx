@@ -11,8 +11,8 @@ type Asset = {
   value: number
   currency: string
   metadata: unknown
-  sheet?: string
-  section?: string
+  sheet?: string | null
+  section?: string | null
 }
 
 type TabKey = 'ASSET' | 'VALUE' | 'RETURNS' | 'REPORTING' | 'ASSORTED' | 'NOTES' | 'DOCUMENTS'

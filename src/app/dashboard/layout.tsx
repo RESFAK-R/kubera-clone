@@ -4,6 +4,8 @@ import { logout } from '@/app/auth/actions'
 import Link from 'next/link'
 import { LogOut, Menu } from 'lucide-react'
 import { SidebarNavLinks } from '@/components/dashboard/SidebarNavLinks'
+import { computeNetWorthTotals } from '@/lib/netWorth'
+import type { Asset } from '@/types/db'
 
 
 export default async function DashboardLayout({
@@ -36,20 +38,11 @@ export default async function DashboardLayout({
   const baseCurrency = profile?.base_currency || 'EUR'
   const userName = profile?.full_name || user.email?.split('@')[0] || 'User'
 
-  // Calculate totals
-  let totalAssets = 0
-  let totalDebts = 0
-
-  assets?.forEach(asset => {
-    const val = Number(asset.value)
-    if (asset.asset_type === 'liability') {
-      totalDebts += val
-    } else {
-      totalAssets += val
-    }
-  })
-
-  const totalNetWorth = totalAssets - totalDebts
+  const {
+    totalAssets,
+    totalDebts,
+    netWorth: totalNetWorth,
+  } = computeNetWorthTotals((assets ?? []) as Asset[])
 
   return (
     <div className="flex h-screen bg-[#f4f5f5] text-[#1a1a1a] font-sans overflow-hidden">

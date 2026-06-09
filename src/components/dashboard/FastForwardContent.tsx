@@ -21,6 +21,7 @@ import {
   ExpenseRuleConfig,
   CashGrowthRuleConfig,
   InflationRuleConfig,
+  AnyRuleConfig,
   ExtraEntry,
   EntryRecurrence,
 } from '@/types/rules'
@@ -237,7 +238,6 @@ export function FastForwardContent({
     const months = monthsForPeriod(forecastPeriod)
     const list: LedgerRow[] = []
     const openingBalance = 0
-    let balance = openingBalance
 
     let cashPool = Math.max(0, totalAssets - investableAssets - totalDebts)
     const incomeConfig = incomeRule?.config as IncomeRuleConfig | undefined
@@ -504,8 +504,8 @@ export function FastForwardContent({
     }
 
     const debts = totalDebts
-    let cashStart = totalCash
-    let investableStart = investableAssets
+    const cashStart = totalCash
+    const investableStart = investableAssets
     const illiquid = totalAssets - investableAssets - totalCash
     const cashOpening = cashStart
     const investableOpening = investableStart
@@ -954,7 +954,7 @@ export function FastForwardContent({
     }
   }
 
-  const handleSaveRuleConfig = async (ruleType: RuleType, enabled: boolean, config: any) => {
+  const handleSaveRuleConfig = async (ruleType: RuleType, enabled: boolean, config: AnyRuleConfig) => {
     await updateRule(ruleType, enabled, config)
   }
 

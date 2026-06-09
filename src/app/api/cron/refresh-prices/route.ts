@@ -20,6 +20,7 @@ export async function POST(req: Request) {
     .from('assets')
     .select('asset_type, ticker')
     .not('ticker', 'is', null)
+    .eq('is_liability', false)
 
   const cryptoSymbols = new Set<string>()
   const stockSymbols = new Set<string>()
@@ -125,7 +126,7 @@ export async function POST(req: Request) {
 
   // Revalue tickerized assets: value = quantity * latest price (FX-converted to base currency).
   // Append asset_history row for the change so the chart picks up the move.
-  const revaluation = { updated: 0, errors: [] as string[] }
+  const revaluation = { updated: 0, snapshots: 0, errors: [] as string[] }
   try {
     const { data: cache } = await supabase.from('tickers_cache').select('kind, symbol, price, currency')
     const priceMap = new Map<string, { price: number; currency: string }>()
@@ -156,11 +157,14 @@ export async function POST(req: Request) {
       .select('id, user_id, ticker, asset_type, quantity, value, currency')
       .not('ticker', 'is', null)
       .gt('quantity', 0)
+      .eq('is_liability', false)
 
     const { data: profiles } = await supabase.from('profiles').select('id, base_currency')
     const baseByUser = new Map<string, string>(
       (profiles ?? []).map((p: { id: string; base_currency: string | null }) => [p.id, p.base_currency ?? 'EUR']),
     )
+
+    const revaluedUsers = new Set<string>()
 
     for (const a of tickAssets ?? []) {
       if (!a.ticker || !a.quantity) continue
@@ -176,21 +180,37 @@ export async function POST(req: Request) {
       const newValue = Math.round(converted * 100) / 100
       if (Math.abs(newValue - Number(a.value)) < 0.01) continue
 
+      const pricedAt = new Date().toISOString()
       const { error: upErr } = await supabase
         .from('assets')
-        .update({ value: newValue, last_priced_at: new Date().toISOString() })
+        .update({ value: newValue, last_priced_at: pricedAt })
         .eq('id', a.id)
       if (upErr) {
         revaluation.errors.push(`asset ${a.id}: ${upErr.message}`)
         continue
       }
-      await supabase.from('asset_history').insert({
+      const { error: historyErr } = await supabase.from('asset_history').insert({
         asset_id: a.id,
         user_id: a.user_id,
         value: newValue,
-        recorded_at: new Date().toISOString(),
+        recorded_at: pricedAt,
       })
+      if (historyErr) {
+        revaluation.errors.push(`asset_history ${a.id}: ${historyErr.message}`)
+      }
+      revaluedUsers.add(a.user_id)
       revaluation.updated += 1
+    }
+
+    for (const userId of revaluedUsers) {
+      const { error: snapshotErr } = await supabase.rpc('capture_net_worth_snapshot', {
+        p_user_id: userId,
+      })
+      if (snapshotErr) {
+        revaluation.errors.push(`snapshot ${userId}: ${snapshotErr.message}`)
+        continue
+      }
+      revaluation.snapshots += 1
     }
   } catch (e) {
     revaluation.errors.push((e as Error).message)

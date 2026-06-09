@@ -11,8 +11,8 @@ type Debt = {
   value: number
   currency: string
   metadata: unknown
-  sheet?: string
-  section?: string
+  sheet?: string | null
+  section?: string | null
 }
 
 type TabKey = 'DEBT' | 'BALANCE' | 'OWNERSHIP' | 'NOTES' | 'DOCUMENTS'

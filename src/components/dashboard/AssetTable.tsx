@@ -18,7 +18,11 @@ type Asset = {
   asset_type: string
   value: number
   currency: string
-  metadata: any
+  metadata: {
+    ticker?: string
+    quantity?: string | number
+    address?: string
+  } | null
 }
 
 type Props = {

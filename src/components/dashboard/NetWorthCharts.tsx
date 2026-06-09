@@ -15,8 +15,8 @@ type Props = {
   stockAssets: number
   cryptoAssets: number
   metalAssets: number
-  largestAsset: any
-  assetsXSheetsData: any[]
+  largestAsset: { name: string; value: number } | null
+  assetsXSheetsData: Array<{ name: string; value: number }>
   baseCurrency: string
 }
 
@@ -157,7 +157,7 @@ export function NetWorthCharts({
                       paddingAngle={2}
                       dataKey="value"
                     >
-                      {investableExCashData.map((entry: any, index: number) => (
+                      {investableExCashData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
@@ -193,7 +193,7 @@ export function NetWorthCharts({
                       paddingAngle={2}
                       dataKey="value"
                     >
-                      {assetsXSheetsData.map((_entry: any, index: number) => (
+                      {assetsXSheetsData.map((_entry, index) => (
                         <Cell key={`cell-sheet-${index}`} fill={index === 0 ? "#4c1d95" : index === 1 ? "#a855f7" : "#d8b4fe"} />
                       ))}
                     </Pie>

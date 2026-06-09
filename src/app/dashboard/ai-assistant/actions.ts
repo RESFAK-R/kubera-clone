@@ -118,7 +118,7 @@ export async function askAssistant(
       .from('net_worth_snapshots')
       .select('*')
       .eq('user_id', user.id)
-      .order('snapshot_date', { ascending: true })
+      .order('snapshot_date', { ascending: false })
       .limit(60),
     supabase
       .from('ai_messages')
@@ -133,7 +133,7 @@ export async function askAssistant(
     assets: (assets ?? []) as Asset[],
     rules: (rules ?? []) as RuleDefinition[],
     recurring: (recurring ?? []) as RecurringRule[],
-    snapshots: (snapshots ?? []) as NetWorthSnapshot[],
+    snapshots: ((snapshots ?? []) as NetWorthSnapshot[]).slice().reverse(),
   })
 
   const system = renderSystemPrompt(ctx)

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { DebtsContent } from '@/components/dashboard/DebtsContent'
+import type { Asset } from '@/types/db'
 
 export default async function DebtsPage() {
   const supabase = await createClient()
@@ -23,8 +24,8 @@ export default async function DebtsPage() {
     .eq('user_id', user.id)
     .order('created_at', { ascending: true })
 
-  const debts = (allAssets ?? []).filter(
-    a => a.sheet === 'Debts' || a.asset_type === 'liability',
+  const debts = ((allAssets ?? []) as Asset[]).filter(
+    (a) => a.is_liability || a.sheet === 'Debts' || a.asset_type === 'liability',
   )
 
   const baseCurrency = profile?.base_currency ?? 'EUR'

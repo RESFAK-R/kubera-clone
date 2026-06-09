@@ -3,38 +3,77 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function addAsset(prevState: any, formData: FormData) {
+const TICKERIZED_ASSET_TYPES = new Set(['stock', 'crypto', 'metal'])
+
+function formString(formData: FormData, key: string): string {
+  const value = formData.get(key)
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function formNumber(formData: FormData, key: string): number | null {
+  const value = formString(formData, key)
+  if (!value) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function normalizeTicker(value: string): string | null {
+  const ticker = value.trim().replace(/^\$/, '').toUpperCase()
+  return ticker || null
+}
+
+export async function addAsset(_prevState: unknown, formData: FormData) {
   const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Unauthorized' }
 
-  const name = formData.get('name') as string
-  const asset_type = formData.get('asset_type') as string
-  const value = parseFloat(formData.get('value') as string)
-  const currency = (formData.get('currency') as string) || 'USD'
+  const name = formString(formData, 'name')
+  const asset_type = formString(formData, 'asset_type')
+  const value = formNumber(formData, 'value')
+  const currency = formString(formData, 'currency') || 'USD'
+  const notes = formString(formData, 'notes')
+  const sheet = formString(formData, 'sheet') || asset_type
+  const section = formString(formData, 'section') || 'General'
+
+  if (!name) return { error: 'Asset name is required' }
+  if (!asset_type) return { error: 'Asset type is required' }
+  if (value == null) return { error: 'Asset value is required' }
   
   // Extract dynamic metadata based on type
-  const metadata: Record<string, any> = {}
+  const metadata: Record<string, unknown> = {}
+  const isTickerized = TICKERIZED_ASSET_TYPES.has(asset_type)
+  const quantity = formNumber(formData, 'quantity') ?? formNumber(formData, 'qty')
+  const pricePerUnit = formNumber(formData, 'price_per_unit')
+  const explicitCostBasis = formNumber(formData, 'cost_basis')
+  const explicitTicker = formString(formData, 'ticker')
+  const ticker = isTickerized
+    ? normalizeTicker(explicitTicker || (quantity != null ? name : ''))
+    : null
+  const costBasis =
+    isTickerized
+      ? explicitCostBasis ?? (quantity != null && pricePerUnit != null ? quantity * pricePerUnit : null)
+      : null
   
-  if (asset_type === 'crypto' || asset_type === 'stock' || asset_type === 'metal') {
-    metadata.ticker = formData.get('ticker')
-    metadata.quantity = formData.get('quantity')
+  if (isTickerized) {
+    if (ticker) metadata.ticker = ticker
+    if (quantity != null) metadata.quantity = quantity
+    if (costBasis != null) metadata.cost_basis = costBasis
   } 
   
   // Real Estate mapping
-  if (formData.get('address')) metadata.address = formData.get('address')
-  if (formData.get('property_name')) metadata.property_name = formData.get('property_name')
+  if (formString(formData, 'address')) metadata.address = formString(formData, 'address')
+  if (formString(formData, 'property_name')) metadata.property_name = formString(formData, 'property_name')
   
   // Vehicle mapping
-  if (formData.get('vin')) metadata.vin = formData.get('vin')
-  if (formData.get('make')) metadata.make = formData.get('make')
-  if (formData.get('model')) metadata.model = formData.get('model')
-  if (formData.get('year')) metadata.year = formData.get('year')
+  if (formString(formData, 'vin')) metadata.vin = formString(formData, 'vin')
+  if (formString(formData, 'make')) metadata.make = formString(formData, 'make')
+  if (formString(formData, 'model')) metadata.model = formString(formData, 'model')
+  if (formString(formData, 'year')) metadata.year = formString(formData, 'year')
   
   // Qty/Price manual mapping
-  if (formData.get('qty')) metadata.qty = formData.get('qty')
-  if (formData.get('price_per_unit')) metadata.price_per_unit = formData.get('price_per_unit')
+  if (quantity != null) metadata.qty = quantity
+  if (pricePerUnit != null) metadata.price_per_unit = pricePerUnit
 
   // Assuming user has a default portfolio. In a real app, you'd select it.
   const { data: portfolio } = await supabase
@@ -44,19 +83,21 @@ export async function addAsset(prevState: any, formData: FormData) {
     .limit(1)
     .single()
 
-  const sheet = (formData.get('sheet') as string) || asset_type
-  const section = (formData.get('section') as string) || 'General'
-
   const { error } = await supabase.from('assets').insert({
     user_id: user.id,
-    portfolio_id: portfolio?.id,
+    portfolio_id: portfolio?.id ?? null,
     name,
     asset_type,
     value,
     currency,
     metadata,
     sheet,
-    section
+    section,
+    ticker,
+    quantity,
+    cost_basis: costBasis,
+    is_liability: asset_type === 'liability' || sheet === 'Debts',
+    notes: notes || null,
   })
 
   if (error) {
@@ -72,7 +113,18 @@ export async function addAsset(prevState: any, formData: FormData) {
 
 export async function updateAsset(
   id: string,
-  patch: { name?: string; value?: number; notes?: string; metadata?: Record<string, unknown>; sheet?: string; section?: string }
+  patch: {
+    name?: string
+    value?: number
+    notes?: string | null
+    metadata?: Record<string, unknown>
+    sheet?: string
+    section?: string
+    ticker?: string | null
+    quantity?: number | null
+    cost_basis?: number | null
+    is_liability?: boolean
+  }
 ) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -84,6 +136,11 @@ export async function updateAsset(
   if (patch.sheet !== undefined) update.sheet = patch.sheet
   if (patch.section !== undefined) update.section = patch.section
   if (patch.metadata !== undefined) update.metadata = patch.metadata
+  if (patch.notes !== undefined) update.notes = patch.notes
+  if (patch.ticker !== undefined) update.ticker = patch.ticker ? normalizeTicker(patch.ticker) : null
+  if (patch.quantity !== undefined) update.quantity = patch.quantity
+  if (patch.cost_basis !== undefined) update.cost_basis = patch.cost_basis
+  if (patch.is_liability !== undefined) update.is_liability = patch.is_liability
 
   const { error } = await supabase
     .from('assets')
@@ -130,6 +187,8 @@ export async function deleteSheet(name: string) {
     .eq('user_id', user.id)
 
   if (error) return { error: error.message }
+  await supabase.rpc('capture_net_worth_snapshot', { p_user_id: user.id })
+  await supabase.rpc('touch_life_beat', { p_user_id: user.id })
   revalidatePath('/dashboard')
   return { success: true }
 }

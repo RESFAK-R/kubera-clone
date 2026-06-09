@@ -53,12 +53,12 @@ export default async function NetWorthPage() {
   const investableCagr = computeCagr(totals.investable, yearAgo?.investable ?? 0, 1)
 
   const largestAsset = assets
-    .filter((a) => !a.is_liability)
+    .filter((a) => !a.is_liability && a.asset_type !== 'liability')
     .reduce<Asset | null>((prev, cur) => (!prev || cur.value > prev.value ? cur : prev), null)
 
   const sheetsMap: Record<string, number> = {}
   for (const a of assets) {
-    if (a.is_liability) continue
+    if (a.is_liability || a.asset_type === 'liability') continue
     const s = a.sheet || 'Others'
     sheetsMap[s] = (sheetsMap[s] || 0) + Number(a.value)
   }

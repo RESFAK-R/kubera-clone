@@ -30,12 +30,12 @@ export function buildFinancialContext(input: {
 
   const sorted = [...input.assets].sort((a, b) => Number(b.value) - Number(a.value))
   const topAssets = sorted
-    .filter((a) => !a.is_liability)
+    .filter((a) => !a.is_liability && a.asset_type !== 'liability')
     .slice(0, 10)
     .map((a) => ({ name: a.name, value: Number(a.value), type: a.asset_type, sheet: a.sheet }))
 
   const debts = sorted
-    .filter((a) => a.is_liability)
+    .filter((a) => a.is_liability || a.asset_type === 'liability')
     .map((a) => ({ name: a.name, value: Number(a.value), sheet: a.sheet }))
 
   const snapshotTrend = input.snapshots

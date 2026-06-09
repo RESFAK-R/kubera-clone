@@ -58,7 +58,7 @@ export function RuleConfigModal({ isOpen, rule, onClose, onSave }: Props) {
             <h2 className="text-[20px] font-bold text-[#1a1a1a] capitalize">
               {rule.rule_type === 'investable' ? 'Investable Assets' : rule.rule_type} Rule
             </h2>
-            <p className="text-[12px] text-gray-500 mt-1">Configure this rule's behavior</p>
+            <p className="text-[12px] text-gray-500 mt-1">Configure this rule&apos;s behavior</p>
           </div>
           <button
             onClick={onClose}

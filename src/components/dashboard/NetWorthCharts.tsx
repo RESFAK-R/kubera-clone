@@ -62,19 +62,19 @@ export function NetWorthCharts({
     { name: 'Metals', value: metalAssets, color: '#d946ef' }
   ].filter(d => d.value > 0)
 
-  if (!mounted) return <div className="min-h-[600px] w-full bg-[#f4f5f5] animate-pulse rounded-lg" />
+  if (!mounted) return <div className="min-h-[420px] w-full bg-[#f4f5f5] animate-pulse rounded-lg lg:min-h-[600px]" />
 
   return (
     <>
       {/* Horizontal Allocation Bar */}
       {largestAsset && (
-        <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-10 mb-8 shadow-sm">
-          <div className="flex justify-between items-center mb-8">
-             <div className="flex flex-col">
-                <span className="text-[17px] font-bold text-[#1a1a1a]">{largestAsset.name}: {formatCurrency(largestAssetVal)}</span>
+        <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-6 mb-8 shadow-sm sm:p-8 lg:p-10">
+          <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
+             <div className="flex min-w-0 flex-col">
+                <span className="break-words text-[15px] font-bold text-[#1a1a1a] sm:text-[17px]">{largestAsset.name}: {formatCurrency(largestAssetVal)}</span>
              </div>
              <div className="flex flex-col text-right">
-                <span className="text-[17px] font-bold text-[#1a1a1a]">Assets: {formatCurrency(totalAssets)}</span>
+                <span className="text-[15px] font-bold text-[#1a1a1a] sm:text-[17px]">Assets: {formatCurrency(totalAssets)}</span>
              </div>
           </div>
           <div className="h-20 w-full flex rounded-sm overflow-hidden border border-gray-100">
@@ -97,16 +97,16 @@ export function NetWorthCharts({
       )}
 
       {/* Allocation Donut Charts Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 xl:gap-8">
           {/* Investable Assets */}
-          <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-8 shadow-sm h-[400px] flex flex-col">
+          <div className="min-w-0 bg-white border border-[#e5e7eb] rounded-[4px] p-6 shadow-sm h-[360px] flex flex-col lg:h-[400px] lg:p-8">
              <div className="flex justify-between items-center mb-4 text-[#1a1a1a]">
                 <h3 className="text-[17px] font-bold">Investable Assets</h3>
                 <span className="text-gray-400">⋮</span>
              </div>
              <div className="flex-1 relative">
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-                   <span className="text-[28px] font-bold">{formatCurrency(investableAssets)}</span>
+                   <span className="break-words text-[24px] font-bold sm:text-[28px]">{formatCurrency(investableAssets)}</span>
                    <span className="text-[12px] text-gray-400 uppercase font-bold tracking-wider">{(totalAssets > 0 ? (investableAssets/totalAssets*100).toFixed(0) : 0)}% OF ASSETS</span>
                 </div>
                 <ResponsiveContainer width="100%" height="100%">
@@ -137,14 +137,14 @@ export function NetWorthCharts({
           </div>
 
           {/* Investable Assets ex Cash */}
-          <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-8 shadow-sm h-[400px] flex flex-col">
+          <div className="min-w-0 bg-white border border-[#e5e7eb] rounded-[4px] p-6 shadow-sm h-[360px] flex flex-col lg:h-[400px] lg:p-8">
              <div className="flex justify-between items-center mb-4 text-[#1a1a1a]">
                 <h3 className="text-[17px] font-bold">Investable Assets ex Cash</h3>
                 <span className="text-gray-400">⋮</span>
              </div>
              <div className="flex-1 relative">
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-                   <span className="text-[28px] font-bold">{formatCurrency(investableAssets)}</span>
+                   <span className="break-words text-[24px] font-bold sm:text-[28px]">{formatCurrency(investableAssets)}</span>
                 </div>
                 <ResponsiveContainer width="100%" height="100%">
                   <RePieChart>
@@ -173,14 +173,14 @@ export function NetWorthCharts({
           </div>
 
           {/* Assets x Sheets */}
-          <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-8 shadow-sm h-[400px] flex flex-col">
+          <div className="min-w-0 bg-white border border-[#e5e7eb] rounded-[4px] p-6 shadow-sm h-[360px] flex flex-col lg:h-[400px] lg:p-8">
              <div className="flex justify-between items-center mb-4 text-[#1a1a1a]">
                 <h3 className="text-[17px] font-bold">Assets x Sheets</h3>
                 <span className="text-gray-400">⋮</span>
              </div>
              <div className="flex-1 relative">
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-                   <span className="text-[28px] font-bold">{formatCurrency(totalAssets)}</span>
+                   <span className="break-words text-[24px] font-bold sm:text-[28px]">{formatCurrency(totalAssets)}</span>
                 </div>
                 <ResponsiveContainer width="100%" height="100%">
                   <RePieChart>

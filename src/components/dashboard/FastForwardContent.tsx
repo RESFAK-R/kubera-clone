@@ -1005,7 +1005,7 @@ export function FastForwardContent({
       {activeTab === 'Net Worth Projections' && (
         <div className="animate-in fade-in duration-300">
           {/* 01 MONTH / 01 YEAR grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 gap-4 mb-4 xl:grid-cols-2">
             <ProjectionCard
               label="01 MONTH"
               netWorth={m1.netWorth}
@@ -1041,7 +1041,7 @@ export function FastForwardContent({
           </div>
 
           {/* 5Y / 10Y / 20Y mini cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+          <div className="grid grid-cols-1 gap-4 mb-10 lg:grid-cols-3">
             <MiniProjectionCard
               years={5}
               year={currentYear + 5}
@@ -1104,7 +1104,7 @@ export function FastForwardContent({
       {activeTab === 'Charts' && (
         <div className="animate-in fade-in duration-300">
           {/* Header */}
-          <div className="flex items-start justify-between mb-6">
+          <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
             <div>
               <div className="text-[13px] font-bold text-gray-400 mb-2">
                 {new Date(currentYear + 10, start.getMonth(), 1).toLocaleDateString('en-US', {
@@ -1112,7 +1112,7 @@ export function FastForwardContent({
                   year: 'numeric',
                 })}
               </div>
-              <div className="text-[40px] font-bold tracking-tight text-[#1a1a1a] leading-none">
+              <div className="break-words text-[32px] font-bold tracking-tight text-[#1a1a1a] leading-none sm:text-[40px]">
                 {fmtCompact(y10.netWorth)}
               </div>
               <div className="text-[13px] font-bold text-green-600 mt-2">
@@ -1129,7 +1129,7 @@ export function FastForwardContent({
           </div>
 
           {/* Chart */}
-          <div className="h-[360px] mb-10">
+          <div className="h-[300px] mb-10 sm:h-[360px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={projection.filter((_, i) => i % 12 === 0)}
@@ -1212,8 +1212,8 @@ export function FastForwardContent({
           </div>
 
           {/* Summary row */}
-          <div className="flex items-baseline justify-between pb-5 border-b border-gray-200 mb-0">
-            <div className="flex items-baseline gap-8">
+          <div className="flex flex-wrap items-baseline justify-between gap-4 pb-5 border-b border-gray-200 mb-0">
+            <div className="flex flex-wrap items-baseline gap-4 sm:gap-8">
               <Summary label="Opening" value={fmt(openingBalance)} />
               <span className="text-gray-300 text-[18px]">+</span>
               <Summary label="Inflow" value={fmt(totalInflow)} />
@@ -1233,109 +1233,111 @@ export function FastForwardContent({
           </div>
 
           {/* Ledger table */}
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] border-b border-gray-100">
-                <th className="text-left font-bold py-3 w-[100px]"></th>
-                <th className="text-left font-bold py-3"></th>
-                <th className="text-right font-bold py-3 w-[130px]">Inflow</th>
-                <th className="text-right font-bold py-3 w-[130px]">Outflow</th>
-                <th className="text-right font-bold py-3 w-[140px]">Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => {
-                const isExtra = r.key.includes(':extra-inc-') || r.key.includes(':extra-exp-')
-                const isOpening = r.key === 'opening'
-                const balance = r.balance ?? 0
-                const extraIsIncome = r.key.includes(':extra-inc-')
-                const extraType = extraIsIncome ? 'income' : 'expense'
-                const extraId = isExtra
-                  ? r.key.split(extraIsIncome ? ':extra-inc-' : ':extra-exp-')[1] ?? null
-                  : null
-                return (
-                  <tr key={r.key} className="border-b border-gray-50 hover:bg-gray-50/50 group">
-                    <td className="py-3 text-gray-500 whitespace-nowrap">
-                      {r.date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                    </td>
-                    <td className="py-3 text-[#1a1a1a]">
-                      {r.editable ? (
-                        <input
-                          type="text"
-                          value={r.description}
-                          onChange={(e) => {
-                            updateRow(r.key, { description: e.target.value })
-                            if (extraId) updateExtraEntry(extraType, extraId, { description: e.target.value })
-                          }}
-                          className="bg-transparent focus:outline-none focus:border-b focus:border-blue-400 w-full"
-                        />
-                      ) : (
-                        r.description
-                      )}
-                    </td>
-                    <td className="py-3 text-right">
-                      {r.editable ? (
-                        <input
-                          type="number"
-                          value={r.inflow || ''}
-                          onChange={(e) => {
-                            updateRow(r.key, { inflow: Number(e.target.value) })
-                            if (extraId && r.inflow >= 0) updateExtraEntry(extraType, extraId, { amount: Number(e.target.value) })
-                          }}
-                          placeholder="—"
-                          className="bg-transparent focus:outline-none focus:border-b focus:border-blue-400 text-right w-24 text-[#1a1a1a]"
-                        />
-                      ) : (
-                        ''
-                      )}
-                    </td>
-                    <td className="py-3 text-right">
-                      {r.editable ? (
-                        <input
-                          type="number"
-                          value={r.outflow || ''}
-                          onChange={(e) => {
-                            updateRow(r.key, { outflow: Number(e.target.value) })
-                            if (extraId && r.outflow >= 0) updateExtraEntry(extraType, extraId, { amount: Number(e.target.value) })
-                          }}
-                          placeholder="—"
-                          className="bg-transparent focus:outline-none focus:border-b focus:border-blue-400 text-right w-24 text-[#1a1a1a]"
-                        />
-                      ) : (
-                        ''
-                      )}
-                    </td>
-                    <td className={`py-3 text-right ${isOpening ? 'text-[#1a1a1a]' : 'font-medium text-[#1a1a1a]'}`}>
-                      {fmt(balance)}
-                      {isExtra && extraId && (
-                        <button
-                          onClick={() => removeExtraEntry(extraType, extraId)}
-                          className="ml-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label="Remove"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-              {/* Closing Balance row */}
-              <tr className="border-b border-gray-100">
-                <td className="py-3 text-gray-500 whitespace-nowrap">
-                  {new Date(
-                    start.getFullYear(),
-                    start.getMonth() + monthsForPeriod(forecastPeriod) - 1,
-                    1
-                  ).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                </td>
-                <td className="py-3 font-bold text-[#1a1a1a]">Closing Balance</td>
-                <td></td>
-                <td></td>
-                <td className="py-3 text-right font-bold text-[#1a1a1a]">{fmt(closingBalance)}</td>
-              </tr>
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-[13px]">
+              <thead>
+                <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] border-b border-gray-100">
+                  <th className="text-left font-bold py-3 w-[100px]"></th>
+                  <th className="text-left font-bold py-3"></th>
+                  <th className="text-right font-bold py-3 w-[130px]">Inflow</th>
+                  <th className="text-right font-bold py-3 w-[130px]">Outflow</th>
+                  <th className="text-right font-bold py-3 w-[140px]">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const isExtra = r.key.includes(':extra-inc-') || r.key.includes(':extra-exp-')
+                  const isOpening = r.key === 'opening'
+                  const balance = r.balance ?? 0
+                  const extraIsIncome = r.key.includes(':extra-inc-')
+                  const extraType = extraIsIncome ? 'income' : 'expense'
+                  const extraId = isExtra
+                    ? r.key.split(extraIsIncome ? ':extra-inc-' : ':extra-exp-')[1] ?? null
+                    : null
+                  return (
+                    <tr key={r.key} className="border-b border-gray-50 hover:bg-gray-50/50 group">
+                      <td className="py-3 text-gray-500 whitespace-nowrap">
+                        {r.date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                      </td>
+                      <td className="py-3 text-[#1a1a1a]">
+                        {r.editable ? (
+                          <input
+                            type="text"
+                            value={r.description}
+                            onChange={(e) => {
+                              updateRow(r.key, { description: e.target.value })
+                              if (extraId) updateExtraEntry(extraType, extraId, { description: e.target.value })
+                            }}
+                            className="bg-transparent focus:outline-none focus:border-b focus:border-blue-400 w-full"
+                          />
+                        ) : (
+                          r.description
+                        )}
+                      </td>
+                      <td className="py-3 text-right">
+                        {r.editable ? (
+                          <input
+                            type="number"
+                            value={r.inflow || ''}
+                            onChange={(e) => {
+                              updateRow(r.key, { inflow: Number(e.target.value) })
+                              if (extraId && r.inflow >= 0) updateExtraEntry(extraType, extraId, { amount: Number(e.target.value) })
+                            }}
+                            placeholder="—"
+                            className="bg-transparent focus:outline-none focus:border-b focus:border-blue-400 text-right w-24 text-[#1a1a1a]"
+                          />
+                        ) : (
+                          ''
+                        )}
+                      </td>
+                      <td className="py-3 text-right">
+                        {r.editable ? (
+                          <input
+                            type="number"
+                            value={r.outflow || ''}
+                            onChange={(e) => {
+                              updateRow(r.key, { outflow: Number(e.target.value) })
+                              if (extraId && r.outflow >= 0) updateExtraEntry(extraType, extraId, { amount: Number(e.target.value) })
+                            }}
+                            placeholder="—"
+                            className="bg-transparent focus:outline-none focus:border-b focus:border-blue-400 text-right w-24 text-[#1a1a1a]"
+                          />
+                        ) : (
+                          ''
+                        )}
+                      </td>
+                      <td className={`py-3 text-right ${isOpening ? 'text-[#1a1a1a]' : 'font-medium text-[#1a1a1a]'}`}>
+                        {fmt(balance)}
+                        {isExtra && extraId && (
+                          <button
+                            onClick={() => removeExtraEntry(extraType, extraId)}
+                            className="ml-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                            aria-label="Remove"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+                {/* Closing Balance row */}
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 text-gray-500 whitespace-nowrap">
+                    {new Date(
+                      start.getFullYear(),
+                      start.getMonth() + monthsForPeriod(forecastPeriod) - 1,
+                      1
+                    ).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                  </td>
+                  <td className="py-3 font-bold text-[#1a1a1a]">Closing Balance</td>
+                  <td></td>
+                  <td></td>
+                  <td className="py-3 text-right font-bold text-[#1a1a1a]">{fmt(closingBalance)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
           {/* Add row button */}
           <button
@@ -1346,7 +1348,7 @@ export function FastForwardContent({
           </button>
 
           {/* Dark totals bar */}
-          <div className="mt-4 bg-[#6b6b6b] text-white grid grid-cols-5 rounded-[2px]">
+          <div className="mt-4 grid min-w-0 grid-cols-1 rounded-[2px] bg-[#6b6b6b] text-white sm:grid-cols-5">
             <div className="py-3 px-4"></div>
             <div className="py-3 px-4"></div>
             <div className="py-3 px-4 text-right text-[13px] font-bold">{fmt(totalInflow)}</div>
@@ -1422,11 +1424,11 @@ function ProjectionDetailsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 backdrop-blur-sm p-6 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 backdrop-blur-sm p-3 overflow-y-auto sm:p-6"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-[6px] shadow-xl w-full max-w-[540px] mt-16 mb-16 p-8 relative animate-in fade-in zoom-in-95 duration-200"
+        className="bg-white rounded-[6px] shadow-xl w-full max-w-[540px] mt-10 mb-10 p-5 relative animate-in fade-in zoom-in-95 duration-200 sm:mt-16 sm:mb-16 sm:p-8"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -1443,7 +1445,7 @@ function ProjectionDetailsModal({
         <div className="flex items-start gap-3 mb-8">
           <div className="w-[3px] h-[50px] bg-purple-500 rounded-full" />
           <div>
-            <div className="text-[30px] font-bold tracking-tight text-[#1a1a1a] leading-none">
+            <div className="break-words text-[28px] font-bold tracking-tight text-[#1a1a1a] leading-none sm:text-[30px]">
               {fmt(breakdown.netWorthEnd)}
             </div>
             <div className="text-[13px] font-bold text-green-600 mt-1">
@@ -1458,13 +1460,13 @@ function ProjectionDetailsModal({
           <div className="border-b border-gray-200">
             <button
               onClick={() => setCashOpen((v) => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50"
+              className="w-full flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50"
             >
               <div className="flex items-center gap-2 text-[14px] font-bold">
                 {cashOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                 Cash
               </div>
-              <div className="flex items-center gap-6 text-[13px]">
+              <div className="flex flex-wrap items-center justify-end gap-3 text-[13px] sm:gap-6">
                 <span className={`font-bold ${cashDelta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                   {fmtDelta(cashDelta)}
                 </span>
@@ -1492,13 +1494,13 @@ function ProjectionDetailsModal({
           <div className="border-b border-gray-200">
             <button
               onClick={() => setInvOpen((v) => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50"
+              className="w-full flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50"
             >
               <div className="flex items-center gap-2 text-[14px] font-bold">
                 {invOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                 Investable Assets
               </div>
-              <div className="flex items-center gap-6 text-[13px]">
+              <div className="flex flex-wrap items-center justify-end gap-3 text-[13px] sm:gap-6">
                 <span className={`font-bold ${invDelta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                   {fmtDelta(invDelta)}
                 </span>
@@ -1522,9 +1524,9 @@ function ProjectionDetailsModal({
           </div>
 
           {/* Total Assets */}
-          <div className="flex items-center justify-between px-4 py-4 bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 bg-white">
             <div className="text-[14px] font-bold">Total Assets</div>
-            <div className="flex items-center gap-6 text-[13px]">
+            <div className="flex flex-wrap items-center justify-end gap-3 text-[13px] sm:gap-6">
               <span className={`font-bold ${assetsDelta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                 {fmtDelta(assetsDelta)}
               </span>
@@ -1535,7 +1537,7 @@ function ProjectionDetailsModal({
 
         {/* Total Debts */}
         <div className="mt-4 border border-gray-200 rounded-[4px]">
-          <div className="flex items-center justify-between px-4 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
             <div className="text-[14px] font-bold">Total Debts</div>
             <div className="text-[13px] font-bold text-[#1a1a1a]">{fmt(breakdown.debts)}</div>
           </div>
@@ -1557,9 +1559,9 @@ function DetailRow({
   trailing?: string
 }) {
   return (
-    <div className="flex items-start justify-between px-4 py-3 border-t border-gray-200/60">
+    <div className="flex flex-wrap items-start justify-between gap-2 px-4 py-3 border-t border-gray-200/60">
       <div className="text-[12px] text-gray-700 pr-6 flex-1">{text}</div>
-      <div className="flex items-center gap-5 text-[12px] whitespace-nowrap">
+      <div className="flex items-center gap-3 text-[12px] whitespace-nowrap sm:gap-5">
         {delta && (
           <span className={`font-bold ${positive ? 'text-green-600' : 'text-red-500'}`}>{delta}</span>
         )}
@@ -1587,22 +1589,22 @@ function ProjectionCard(props: {
   return (
     <button
       onClick={onClick}
-      className="bg-white border border-[#e5e7eb] rounded-[4px] p-6 shadow-sm text-left hover:shadow-md hover:border-gray-300 transition-all cursor-pointer"
+      className="min-w-0 bg-white border border-[#e5e7eb] rounded-[4px] p-5 shadow-sm text-left hover:shadow-md hover:border-gray-300 transition-all cursor-pointer sm:p-6"
       type="button"
     >
       <div className="text-[13px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-4">{label}</div>
 
       <div className="text-[11px] font-medium text-gray-500 mb-1">Net Worth</div>
-      <div className="flex items-baseline gap-1 mb-1">
+      <div className="mb-1 flex min-w-0 flex-wrap items-baseline gap-1">
         <span className="text-[14px] font-bold">{fmt(netWorth).slice(0, 1)}</span>
-        <span className="text-[28px] font-bold tracking-tight text-[#1a1a1a]">{fmt(netWorth).slice(2)}</span>
+        <span className="break-words text-[24px] font-bold tracking-tight text-[#1a1a1a] sm:text-[28px]">{fmt(netWorth).slice(2)}</span>
       </div>
       <div className={`text-[12px] font-bold mb-5 ${positive ? 'text-green-600' : 'text-red-500'}`}>
         {fmtDelta(deltaAbs)} ({positive ? '+' : ''}
         {deltaPct.toFixed(2).replace('.', ',')}%)
       </div>
 
-      <div className="grid grid-cols-2 gap-6 mb-5">
+      <div className="grid grid-cols-1 gap-4 mb-5 sm:grid-cols-2 sm:gap-6">
         <div>
           <div className="text-[11px] font-medium text-gray-500 mb-1">Assets</div>
           <div className="text-[14px] font-bold">{fmt(assets)}</div>
@@ -1613,7 +1615,7 @@ function ProjectionCard(props: {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
           <div className="text-[11px] font-medium text-gray-500 mb-1">Income</div>
           <div className="text-[14px] font-bold">{fmt(income)}</div>
@@ -1647,7 +1649,7 @@ function MiniProjectionCard(props: {
     <button
       onClick={onClick}
       type="button"
-      className="bg-white border border-[#e5e7eb] rounded-[4px] p-6 shadow-sm text-left hover:shadow-md hover:border-gray-300 transition-all cursor-pointer"
+      className="min-w-0 bg-white border border-[#e5e7eb] rounded-[4px] p-5 shadow-sm text-left hover:shadow-md hover:border-gray-300 transition-all cursor-pointer sm:p-6"
     >
       <div className="flex items-baseline gap-2 mb-4">
         <span className="text-[13px] font-bold text-gray-400 uppercase tracking-[0.15em]">
@@ -1656,7 +1658,7 @@ function MiniProjectionCard(props: {
         <span className="text-[10px] font-bold text-gray-400">{year}</span>
       </div>
       <div className="text-[11px] font-medium text-gray-500 mb-1">Net Worth</div>
-      <div className="text-[22px] font-bold tracking-tight text-[#1a1a1a] mb-1">
+      <div className="break-words text-[20px] font-bold tracking-tight text-[#1a1a1a] mb-1 sm:text-[22px]">
         {fmtCompact(netWorth)}
       </div>
       <div className={`text-[12px] font-bold ${positive ? 'text-green-600' : 'text-red-500'}`}>

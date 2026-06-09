@@ -91,16 +91,16 @@ export default async function RecapPage() {
       : null
 
   return (
-    <div className="flex-1 w-full bg-[#f4f5f5] pb-24 px-8 md:px-16 overflow-y-auto">
-      <div className="max-w-[1200px] mx-auto pt-16">
+    <div className="w-full min-w-0 overflow-x-hidden bg-[#f4f5f5] px-4 pb-20 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1180px] min-w-0 pt-8 lg:pt-12">
         <h1 className="text-[32px] font-bold tracking-tight text-[#1a1a1a] mb-8">Recap</h1>
 
         {/* Summary hero */}
-        <div className="grid grid-cols-12 gap-8 mb-12">
-          <div className="col-span-12 md:col-span-8 bg-white border border-[#e5e7eb] rounded-[4px] p-10 flex flex-col justify-between shadow-sm h-[400px]">
+        <div className="mb-10 grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-12 xl:gap-8">
+          <div className="min-w-0 bg-white border border-[#e5e7eb] rounded-[4px] p-6 sm:p-8 lg:p-10 flex flex-col justify-between shadow-sm min-h-[360px] xl:col-span-8">
             <div>
               <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Net Worth</h3>
-              <div className="text-[56px] font-medium tracking-tighter leading-tight">
+              <div className="break-words text-[40px] font-medium leading-tight tracking-tight sm:text-[50px] lg:text-[56px]">
                 {new Intl.NumberFormat('de-DE', {
                   style: 'currency',
                   currency: baseCurrency,
@@ -122,12 +122,12 @@ export default async function RecapPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-12 border-t border-gray-100 pt-10 mt-10">
+            <div className="mt-10 grid grid-cols-1 gap-6 border-t border-gray-100 pt-8 sm:grid-cols-2 sm:gap-12 lg:pt-10">
               <div>
                 <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1">
                   Total Assets
                 </h4>
-                <div className="text-[28px] font-medium tracking-tight">
+                <div className="break-words text-[24px] font-medium tracking-tight sm:text-[28px]">
                   {new Intl.NumberFormat('de-DE', {
                     style: 'currency',
                     currency: baseCurrency,
@@ -139,7 +139,7 @@ export default async function RecapPage() {
                 <h4 className="text-[11px] font-bold text-red-400 uppercase tracking-widest mb-1">
                   Total Debts
                 </h4>
-                <div className="text-[28px] font-medium tracking-tight text-red-500">
+                <div className="break-words text-[24px] font-medium tracking-tight text-red-500 sm:text-[28px]">
                   {new Intl.NumberFormat('de-DE', {
                     style: 'currency',
                     currency: baseCurrency,
@@ -151,14 +151,14 @@ export default async function RecapPage() {
           </div>
 
           {/* Portfolio return summary */}
-          <div className="col-span-12 md:col-span-4 bg-white border border-[#e5e7eb] rounded-[4px] p-8 shadow-sm h-[400px] flex flex-col">
+          <div className="min-w-0 bg-white border border-[#e5e7eb] rounded-[4px] p-6 sm:p-8 shadow-sm min-h-[320px] xl:min-h-[360px] xl:col-span-4 flex flex-col">
             <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-6">
               Portfolio Return
             </h3>
             {portfolioReturn.returnPct !== null ? (
               <>
                 <div
-                  className={`text-[42px] font-medium tracking-tighter leading-tight mb-1 ${
+                  className={`break-words text-[36px] font-medium leading-tight tracking-tight mb-1 sm:text-[42px] ${
                     portfolioReturn.returnAbs >= 0 ? 'text-green-600' : 'text-red-500'
                   }`}
                 >

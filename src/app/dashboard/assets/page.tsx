@@ -57,20 +57,20 @@ export default async function AssetsPage() {
   const dayDelta = computeDelta(totalAssets, yesterday?.total_assets)
 
   return (
-    <div className="flex-1 w-full bg-[#f4f5f5] pb-24 px-8 md:px-16 overflow-y-auto">
-      <div className="max-w-[900px] mx-auto pt-10">
+    <div className="w-full min-w-0 overflow-x-hidden bg-[#f4f5f5] px-4 pb-20 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[980px] min-w-0 pt-8">
 
         {/* Header */}
         <div className="mb-6">
           {assets.length === 0 ? (
-            <h1 className="text-[32px] font-bold tracking-tight text-[#1a1a1a] leading-tight mb-2 whitespace-pre-line">
+            <h1 className="text-[30px] font-bold tracking-tight text-[#1a1a1a] leading-tight mb-2 whitespace-pre-line sm:text-[32px]">
               {'All your assets\nin one place!'}
             </h1>
           ) : (
             <>
-              <div className="flex items-baseline gap-1">
+              <div className="flex min-w-0 flex-wrap items-baseline gap-1">
                 <span className="text-[15px] font-bold text-[#1a1a1a]">{sym}</span>
-                <span className="text-[46px] font-bold tracking-tight text-[#1a1a1a] leading-none">
+                <span className="text-[38px] font-bold tracking-tight text-[#1a1a1a] leading-none sm:text-[46px]">
                   {Math.round(totalAssets).toLocaleString('de-DE')}
                 </span>
               </div>
@@ -86,7 +86,7 @@ export default async function AssetsPage() {
           )}
         </div>
 
-        <div className="mb-16">
+        <div className="mb-16 min-w-0">
           <AssetSpreadsheet
             assets={assets}
             baseCurrency={baseCurrency}

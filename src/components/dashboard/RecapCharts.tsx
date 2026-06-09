@@ -56,18 +56,18 @@ export function RecapCharts({
   return (
     <div className="space-y-8">
       {/* Row 1: Asset class + Sheet breakdown pies */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:gap-8">
         <PieCard title="Asset Classes" data={assetClassData} currency={baseCurrency} />
         <PieCard title="Sheets" data={sheetData} currency={baseCurrency} />
       </div>
 
       {/* Row 2: Benchmarks 24h performance */}
       {benchmarks.length > 0 && (
-        <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-8 shadow-sm">
+        <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-6 shadow-sm sm:p-8">
           <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-6">
             Benchmarks (24h change)
           </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
             {benchmarks.map((b) => (
               <div key={b.symbol} className="border border-gray-100 rounded-[4px] p-4">
                 <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1">
@@ -107,7 +107,7 @@ export function RecapCharts({
 
       {/* Row 3: Top gainers + losers */}
       {(gainers.length > 0 || losers.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:gap-8">
           <MoversCard title="Top Gainers" movers={gainers} currency={baseCurrency} positive />
           <MoversCard title="Top Losers" movers={losers} currency={baseCurrency} positive={false} />
         </div>
@@ -115,7 +115,7 @@ export function RecapCharts({
 
       {/* Row 4: Asset returns bar chart */}
       {assetReturns.filter((r) => r.returnPct !== null).length > 0 && (
-        <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-8 shadow-sm">
+        <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-6 shadow-sm sm:p-8">
           <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-6">
             Return by Asset (cost basis vs current value)
           </h3>
@@ -172,13 +172,13 @@ export function RecapCharts({
 
       {/* Row 5: Full asset returns table */}
       {assetReturns.length > 0 && (
-        <div className="bg-white border border-[#e5e7eb] rounded-[4px] shadow-sm">
+        <div className="overflow-x-auto bg-white border border-[#e5e7eb] rounded-[4px] shadow-sm">
           <div className="px-8 pt-8 pb-4">
             <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
               Asset Returns
             </h3>
           </div>
-          <table className="w-full text-[13px]">
+          <table className="w-full min-w-[760px] text-[13px]">
             <thead>
               <tr className="border-b border-gray-100">
                 <th className="text-left px-8 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
@@ -278,7 +278,7 @@ function PieCard({
   currency: string
 }) {
   return (
-    <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-8 shadow-sm h-[400px] flex flex-col">
+    <div className="min-w-0 bg-white border border-[#e5e7eb] rounded-[4px] p-6 shadow-sm h-[360px] flex flex-col sm:p-8 lg:h-[400px]">
       <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-6">{title}</h3>
       {data.length > 0 ? (
         <>
@@ -305,7 +305,7 @@ function PieCard({
               </RePieChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {data.map((item, index) => (
               <div key={item.name} className="flex items-center gap-2 min-w-0">
                 <div
@@ -339,19 +339,19 @@ function MoversCard({
   positive: boolean
 }) {
   return (
-    <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-8 shadow-sm">
+    <div className="min-w-0 bg-white border border-[#e5e7eb] rounded-[4px] p-6 shadow-sm sm:p-8">
       <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">{title}</h3>
       {movers.length === 0 ? (
         <p className="text-[13px] text-gray-400">No data — add cost basis to assets.</p>
       ) : (
         <div className="space-y-3">
           {movers.map((r) => (
-            <div key={r.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-              <div>
+            <div key={r.id} className="flex items-center justify-between gap-4 py-2 border-b border-gray-50 last:border-0">
+              <div className="min-w-0">
                 <div className="text-[13px] font-bold text-[#1a1a1a]">{r.name}</div>
                 <div className="text-[11px] text-gray-400 uppercase">{r.assetType}</div>
               </div>
-              <div className="text-right">
+              <div className="flex-shrink-0 text-right">
                 <div
                   className={`text-[14px] font-bold ${positive ? 'text-green-600' : 'text-red-500'}`}
                 >

@@ -39,13 +39,13 @@ export function NetWorthChart({
 
   if (points.length < 2) {
     return (
-      <div className="bg-white border border-[#e5e7eb] rounded-[4px] min-h-[500px] shadow-sm relative overflow-hidden flex flex-col pt-10 px-10 mb-8">
-        <h2 className="text-[32px] font-bold text-[#1a1a1a]/15 absolute top-10 left-10 select-none">
+      <div className="bg-white border border-[#e5e7eb] rounded-[4px] min-h-[380px] lg:min-h-[500px] shadow-sm relative overflow-hidden flex flex-col pt-8 px-5 sm:px-8 lg:px-10 mb-8">
+        <h2 className="text-[28px] sm:text-[32px] font-bold text-[#1a1a1a]/15 absolute top-8 left-5 sm:left-8 lg:left-10 select-none">
           Net Worth
         </h2>
         <div className="flex-1 flex items-center justify-center">
-          <div className="bg-white shadow-lg border border-gray-100 px-8 py-5 rounded-full">
-            <span className="text-[18px] font-medium text-[#1a1a1a]">
+          <div className="mx-4 bg-white shadow-lg border border-gray-100 px-5 py-4 rounded-full text-center sm:px-8 sm:py-5">
+            <span className="text-[14px] font-medium text-[#1a1a1a] sm:text-[18px]">
               Chart appears once a second daily snapshot is captured
             </span>
           </div>
@@ -55,10 +55,10 @@ export function NetWorthChart({
   }
 
   return (
-    <div className="bg-white border border-[#e5e7eb] rounded-[4px] min-h-[500px] shadow-sm relative overflow-hidden flex flex-col pt-10 px-10 pb-6 mb-8">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-[32px] font-bold text-[#1a1a1a]/15 select-none">Net Worth</h2>
-        <div className="flex gap-1">
+    <div className="bg-white border border-[#e5e7eb] rounded-[4px] min-h-[380px] lg:min-h-[500px] shadow-sm relative overflow-hidden flex flex-col pt-8 px-5 pb-6 mb-8 sm:px-8 lg:px-10">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[28px] font-bold text-[#1a1a1a]/15 select-none sm:text-[32px]">Net Worth</h2>
+        <div className="flex flex-wrap gap-1">
           {RANGES.map((r) => (
             <button
               key={r}
@@ -72,7 +72,7 @@ export function NetWorthChart({
           ))}
         </div>
       </div>
-      <div className="flex-1 min-h-[320px]">
+      <div className="flex-1 min-h-[280px] lg:min-h-[320px]">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={points} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
             <XAxis

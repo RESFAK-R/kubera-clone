@@ -512,8 +512,8 @@ export function DebtsContent({ debts, baseCurrency }: Props) {
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-[#e5e7eb] mt-6">
-        <div className="grid grid-cols-[1fr_200px_40px_40px] border-b border-[#e5e7eb]">
+      <div className="overflow-x-auto bg-white border border-[#e5e7eb] mt-6">
+        <div className="grid min-w-[520px] grid-cols-[minmax(0,1fr)_160px_40px_40px] border-b border-[#e5e7eb] sm:grid-cols-[minmax(0,1fr)_200px_40px_40px]">
           <div className="py-3 px-5 text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em]">Debt</div>
           <div className="py-3 px-5 text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] text-right">Balance</div>
           <div />
@@ -523,7 +523,7 @@ export function DebtsContent({ debts, baseCurrency }: Props) {
         {visibleDebts.length === 0 && (
           <>
             {[0, 1, 2].map(i => (
-              <div key={i} className="grid grid-cols-[1fr_200px_40px_40px] border-b border-[#f1f2f2] items-center">
+              <div key={i} className="grid min-w-[520px] grid-cols-[minmax(0,1fr)_160px_40px_40px] border-b border-[#f1f2f2] items-center sm:grid-cols-[minmax(0,1fr)_200px_40px_40px]">
                 <div className="py-4 px-5 text-[15px] text-gray-300">Debt</div>
                 <div className="py-4 px-5 text-[15px] text-gray-300 text-right">Balance</div>
                 <div />
@@ -539,10 +539,10 @@ export function DebtsContent({ debts, baseCurrency }: Props) {
           return (
             <div
               key={debt.id}
-              className="grid grid-cols-[1fr_200px_40px_40px] border-b border-[#f1f2f2] items-center hover:bg-[#f8f9f9] group transition-colors"
+              className="grid min-w-[520px] grid-cols-[minmax(0,1fr)_160px_40px_40px] border-b border-[#f1f2f2] items-center hover:bg-[#f8f9f9] group transition-colors sm:grid-cols-[minmax(0,1fr)_200px_40px_40px]"
             >
               <div
-                className="py-4 px-5 text-[15px] text-[#1a1a1a] font-medium cursor-pointer"
+                className="min-w-0 truncate py-4 px-5 text-[15px] text-[#1a1a1a] font-medium cursor-pointer"
                 onDoubleClick={() => startEdit(debt, 'name')}
                 onClick={() => !isEditingName && setDetailDebt(debt)}
               >

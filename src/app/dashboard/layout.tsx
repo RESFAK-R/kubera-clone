@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { logout } from '@/app/auth/actions'
 import Link from 'next/link'
-import { LogOut, Menu } from 'lucide-react'
+import { Bot, LogOut, Menu, RefreshCw, Search, Share2 } from 'lucide-react'
 import { SidebarNavLinks } from '@/components/dashboard/SidebarNavLinks'
 import { computeNetWorthTotals } from '@/lib/netWorth'
 import type { Asset } from '@/types/db'
@@ -45,11 +45,11 @@ export default async function DashboardLayout({
   } = computeNetWorthTotals((assets ?? []) as Asset[])
 
   return (
-    <div className="flex h-screen bg-[#f4f5f5] text-[#1a1a1a] font-sans overflow-hidden">
+    <div className="flex h-dvh bg-[#f4f5f5] text-[#1a1a1a] font-sans overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-[260px] flex-shrink-0 border-r border-[#e5e7eb] flex flex-col justify-between hidden md:flex bg-[#f4f5f5]">
-        <div>
-          <div className="h-20 flex items-center px-6 mb-4">
+      <aside className="w-[260px] flex-shrink-0 border-r border-[#e5e7eb] flex-col justify-between hidden lg:flex bg-[#f4f5f5]">
+        <div className="min-w-0">
+          <div className="h-20 flex items-center px-6 mb-4 min-w-0">
             <Menu className="w-5 h-5 mr-4 text-gray-500 cursor-pointer" />
             <span className="font-bold tracking-[0.15em] text-[18px]">KUBERA</span>
           </div>
@@ -94,39 +94,46 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full bg-[#f4f5f5] overflow-y-auto relative">
+      <main className="min-w-0 flex-1 flex flex-col h-full bg-[#f4f5f5] overflow-y-auto overflow-x-hidden relative">
         {/* Top Right Icons Header */}
-        <header className="sticky top-0 right-0 p-8 flex justify-end items-center space-x-8 text-[#1a1a1a] z-50 w-full bg-[#f4f5f5]/80 backdrop-blur-sm">
-          <div className="flex items-center space-x-6">
+        <header className="sticky top-0 right-0 z-50 w-full bg-[#f4f5f5]/85 backdrop-blur-sm px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center justify-between gap-4 text-[#1a1a1a]">
+            <div className="flex items-center gap-3 lg:hidden min-w-0">
+              <Menu className="w-5 h-5 text-gray-500" />
+              <span className="font-bold tracking-[0.15em] text-[16px]">KUBERA</span>
+            </div>
+
+            <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-3 sm:gap-5">
             <button className="text-gray-900 hover:bg-black/5 p-1 rounded transition" title="Refresh">
-               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 22v-6h6"/></svg>
+               <RefreshCw className="w-5 h-5" />
             </button>
             <button className="text-gray-900 hover:bg-black/5 p-1 rounded transition" title="Search">
-               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+               <Search className="w-5 h-5" />
             </button>
             <button className="text-gray-900 hover:bg-black/5 p-1 rounded transition" title="Share">
-               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+               <Share2 className="w-5 h-5" />
             </button>
             <Link href="/dashboard/ai-assistant" className="text-gray-900 hover:bg-black/5 p-1 rounded transition" title="AI Assistant">
-               <svg width="20" height="20" viewBox="0 0 41 41" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M37.532 16.87a9.963 9.963 0 0 0-.856-8.184 10.078 10.078 0 0 0-10.855-4.835 9.964 9.964 0 0 0-6.227-3.274 10.079 10.079 0 0 0-10.855 4.835 9.965 9.965 0 0 0-6.227 3.274 10.079 10.079 0 0 0-2.372 10.538 9.962 9.962 0 0 0 .856 8.184 10.079 10.079 0 0 0 10.855 4.835 9.965 9.965 0 0 0 6.228 3.274 10.079 10.079 0 0 0 10.854-4.835 9.965 9.965 0 0 0 6.228-3.274 10.079 10.079 0 0 0 2.372-10.538zm-15.532 8.365a7.453 7.453 0 0 1-4.773-1.718l.236-.134 7.922-4.575a.912.912 0 0 0 .461-.8V13.14l3.349 1.934a.085.085 0 0 1 .046.065v9.268a7.473 7.473 0 0 1-7.241 5.828zm-15.701-6.849a7.43 7.43 0 0 1-.888-4.987l.236.142 7.922 4.574a.913.913 0 0 0 .924 0L23.419 13.9v3.868a.087.087 0 0 1-.035.073l-8.008 4.622a7.472 7.472 0 0 1-9.077-3.077zm-2.043-17.479a7.44 7.44 0 0 1 3.882-3.272l-.001.271v9.147a.914.914 0 0 0 .462.8l9.406 5.432-3.349 1.934a.086.086 0 0 1-.082.007L6.566 11.2a7.473 7.473 0 0 1-.31-9.293zm27.556 6.412-9.406-5.432 3.349-1.934a.086.086 0 0 1 .082-.007l7.945 4.586a7.474 7.474 0 0 1-1.158 13.528v-9.418a.914.914 0 0 0-.812-.323zm3.332-5.01-.236-.143-7.922-4.574a.912.912 0 0 0-.924 0l-9.406 5.432V13.9a.087.087 0 0 1 .035.073l8.008 4.622a7.473 7.473 0 0 1 9.077 3.077 7.43 7.43 0 0 1 .888 4.987l-.236-.142-7.922-4.575a.912.912 0 0 0-.924 0l-9.406 5.432v-3.868a.087.087 0 0 1 .035-.073l8.008-4.622a7.473 7.473 0 0 1 9.085-3.079 7.43 7.43 0 0 1 .888-4.987l-.001-.001z"/></svg>
+               <Bot className="w-5 h-5" />
             </Link>
             
-            <div className="flex items-center space-x-4 ml-4">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-4 sm:ml-2">
               <button className="flex items-center text-[15px] font-medium text-gray-800 transition">
                  {baseCurrency} {baseCurrency === 'EUR' ? '€' : '$'} <span className="ml-1 text-[8px]">▼</span>
               </button>
 
-              <button className="flex items-center text-[15px] font-medium text-gray-800 transition gap-3 group">
-                 <span className="group-hover:underline">{userName}</span> <span className="text-[8px]">▼</span>
-                 <div className="w-9 h-9 rounded-full border border-gray-300 overflow-hidden shadow-sm">
+              <button className="flex min-w-0 items-center text-[15px] font-medium text-gray-800 transition gap-2 sm:gap-3 group">
+                 <span className="hidden max-w-[160px] truncate group-hover:underline sm:inline">{userName}</span> <span className="hidden text-[8px] sm:inline">▼</span>
+                 <div className="w-9 h-9 flex-shrink-0 rounded-full border border-gray-300 overflow-hidden shadow-sm">
                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userName}`} alt="Avatar" className="w-full h-full object-cover" />
                  </div>
               </button>
             </div>
+            </div>
           </div>
         </header>
 
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           {children}
         </div>
       </main>

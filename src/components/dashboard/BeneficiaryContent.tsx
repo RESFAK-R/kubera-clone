@@ -76,8 +76,8 @@ export function BeneficiaryContent({
   }
 
   return (
-    <div className="flex-1 w-full bg-[#f4f5f5] pb-24 px-8 md:px-16 overflow-y-auto">
-      <div className="max-w-[800px] mx-auto pt-16">
+    <div className="w-full min-w-0 overflow-x-hidden bg-[#f4f5f5] px-4 pb-20 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[860px] min-w-0 pt-8 lg:pt-12">
         <h1 className="text-[32px] font-bold tracking-tight text-[#1a1a1a] mb-4">Beneficiary</h1>
         <p className="text-[14px] text-gray-500 mb-12 max-w-xl leading-relaxed">
           The Beneficiary feature ensures your loved ones can access your portfolio, along with the
@@ -91,7 +91,7 @@ export function BeneficiaryContent({
         )}
 
         <div className="grid grid-cols-1 gap-8">
-          <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-10 shadow-sm relative overflow-hidden group">
+          <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-6 shadow-sm relative overflow-hidden group sm:p-8 lg:p-10">
             <div className="absolute top-0 right-0 p-4 opacity-5 bg-black rounded-bl-full group-hover:scale-110 transition-transform">
               <ShieldCheck className="w-24 h-24" />
             </div>
@@ -152,7 +152,7 @@ export function BeneficiaryContent({
                 )}
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => setEnabled((e) => !e)}
                   className="px-4 py-2 bg-gray-100 rounded-[4px] text-[12px] font-bold uppercase tracking-widest hover:bg-gray-200 transition-colors"
@@ -177,8 +177,8 @@ export function BeneficiaryContent({
             </div>
           </div>
 
-          <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-10 shadow-sm">
-            <div className="flex items-center justify-between mb-8">
+          <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-6 shadow-sm sm:p-8 lg:p-10">
+            <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-[#1a1a1a]">
                   <Users className="w-6 h-6" />

@@ -33,11 +33,11 @@ export function SidebarNavLinks({ totalNetWorth, totalAssets, totalDebts, baseCu
       {/* Net Worth */}
       <Link
         href="/dashboard/networth"
-        className={`flex items-center justify-between px-4 py-3 hover:bg-black/5 transition-colors ${isActive('/dashboard/networth') ? '' : 'opacity-70'}`}
+        className={`flex min-w-0 items-center justify-between gap-3 px-4 py-3 hover:bg-black/5 transition-colors ${isActive('/dashboard/networth') ? '' : 'opacity-70'}`}
       >
-        <div className="flex items-center">
+        <div className="flex min-w-0 items-center">
           <PieChart className={`w-[20px] h-[20px] mr-4 ${isActive('/dashboard/networth') ? 'text-gray-900' : 'text-gray-500'}`} />
-          <div className="flex flex-col">
+          <div className="flex min-w-0 flex-col">
             <span className={`text-[14px] ${isActive('/dashboard/networth') ? 'font-bold text-[#1a1a1a]' : 'font-medium text-gray-700'}`}>
               Net Worth
             </span>
@@ -46,7 +46,7 @@ export function SidebarNavLinks({ totalNetWorth, totalAssets, totalDebts, baseCu
             )}
           </div>
         </div>
-        <span className={`text-[14px] ${isActive('/dashboard/networth') ? 'font-bold text-gray-800' : 'font-medium text-gray-500'}`}>
+        <span className={`flex-shrink-0 text-right text-[14px] ${isActive('/dashboard/networth') ? 'font-bold text-gray-800' : 'font-medium text-gray-500'}`}>
           {formatCurrency(totalNetWorth)}
         </span>
       </Link>
@@ -56,15 +56,15 @@ export function SidebarNavLinks({ totalNetWorth, totalAssets, totalDebts, baseCu
       {/* Assets */}
       <Link
         href="/dashboard/assets"
-        className={`flex items-center justify-between px-4 py-3 hover:bg-black/5 transition-colors ${isActive('/dashboard/assets') ? '' : 'opacity-70'}`}
+        className={`flex min-w-0 items-center justify-between gap-3 px-4 py-3 hover:bg-black/5 transition-colors ${isActive('/dashboard/assets') ? '' : 'opacity-70'}`}
       >
-        <div className="flex items-center">
+        <div className="flex min-w-0 items-center">
           <Gem className={`w-[20px] h-[20px] mr-4 ${isActive('/dashboard/assets') ? 'text-gray-900' : 'text-gray-500'}`} />
-          <span className={`text-[14px] ${isActive('/dashboard/assets') ? 'font-bold text-[#1a1a1a]' : 'font-medium text-gray-700'}`}>
+          <span className={`truncate text-[14px] ${isActive('/dashboard/assets') ? 'font-bold text-[#1a1a1a]' : 'font-medium text-gray-700'}`}>
             Assets
           </span>
         </div>
-        <span className={`text-[14px] ${isActive('/dashboard/assets') ? 'font-bold text-gray-800' : 'font-medium text-gray-500'}`}>
+        <span className={`flex-shrink-0 text-right text-[14px] ${isActive('/dashboard/assets') ? 'font-bold text-gray-800' : 'font-medium text-gray-500'}`}>
           {formatCurrency(totalAssets)}
         </span>
       </Link>
@@ -74,15 +74,15 @@ export function SidebarNavLinks({ totalNetWorth, totalAssets, totalDebts, baseCu
       {/* Debts */}
       <Link
         href="/dashboard/debts"
-        className={`flex items-center justify-between px-4 py-3 hover:bg-black/5 transition-colors ${isActive('/dashboard/debts') ? '' : 'opacity-70'}`}
+        className={`flex min-w-0 items-center justify-between gap-3 px-4 py-3 hover:bg-black/5 transition-colors ${isActive('/dashboard/debts') ? '' : 'opacity-70'}`}
       >
-        <div className="flex items-center">
+        <div className="flex min-w-0 items-center">
           <LinkIcon className={`w-[20px] h-[20px] mr-4 ${isActive('/dashboard/debts') ? 'text-gray-900' : 'text-gray-500'}`} />
-          <span className={`text-[14px] ${isActive('/dashboard/debts') ? 'font-bold text-[#1a1a1a]' : 'font-medium text-gray-700'}`}>
+          <span className={`truncate text-[14px] ${isActive('/dashboard/debts') ? 'font-bold text-[#1a1a1a]' : 'font-medium text-gray-700'}`}>
             Debts
           </span>
         </div>
-        <span className={`text-[14px] ${isActive('/dashboard/debts') ? 'font-bold text-gray-800' : 'font-medium text-gray-500'}`}>
+        <span className={`flex-shrink-0 text-right text-[14px] ${isActive('/dashboard/debts') ? 'font-bold text-gray-800' : 'font-medium text-gray-500'}`}>
           {formatCurrency(totalDebts)}
         </span>
       </Link>

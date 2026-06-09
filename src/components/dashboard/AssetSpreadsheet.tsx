@@ -223,9 +223,9 @@ export function AssetSpreadsheet({ assets, baseCurrency, tabs: initialTabs }: Pr
         {Object.entries(sections).map(([sectionName, sectionAssets]) => {
           const sectionTotal = sectionAssets.reduce((sum, a) => sum + Number(a.value), 0)
           return (
-          <div key={sectionName} className="bg-white border border-[#e5e7eb] rounded-[2px] shadow-sm">
+          <div key={sectionName} className="overflow-x-auto bg-white border border-[#e5e7eb] rounded-[2px] shadow-sm">
             {/* Section Header */}
-            <div className="grid grid-cols-[30px_1fr_150px_40px_40px] text-[10px] font-bold text-gray-400 tracking-[0.15em] uppercase border-b border-[#f1f2f2]">
+            <div className="grid min-w-[560px] grid-cols-[30px_minmax(0,1fr)_140px_40px_40px] text-[10px] font-bold text-gray-400 tracking-[0.15em] uppercase border-b border-[#f1f2f2] sm:grid-cols-[30px_minmax(0,1fr)_150px_40px_40px]">
               <div className="py-2.5 px-3" />
               <div className="py-2.5 px-4 border-r border-[#f1f2f2]">ASSET</div>
               <div className="py-2.5 px-4 border-r border-[#f1f2f2] text-right">VALUE</div>
@@ -241,7 +241,7 @@ export function AssetSpreadsheet({ assets, baseCurrency, tabs: initialTabs }: Pr
                 return (
                   <div
                     key={asset.id}
-                    className="grid grid-cols-[30px_1fr_150px_40px_40px] border-b border-[#f1f2f2] items-center hover:bg-[#f8f9f9] group transition-colors"
+                    className="grid min-w-[560px] grid-cols-[30px_minmax(0,1fr)_140px_40px_40px] border-b border-[#f1f2f2] items-center hover:bg-[#f8f9f9] group transition-colors sm:grid-cols-[30px_minmax(0,1fr)_150px_40px_40px]"
                   >
                     <div className="py-2 px-3 text-gray-300 opacity-0 group-hover:opacity-100 cursor-grab flex justify-center">
                       <GripVertical className="w-3.5 h-3.5" />
@@ -347,7 +347,7 @@ export function AssetSpreadsheet({ assets, baseCurrency, tabs: initialTabs }: Pr
               {/* + ADD ASSET Row */}
               <AddAssetGridModal
                 trigger={
-                  <div className="grid grid-cols-[30px_1fr_150px_40px_40px] items-center bg-[#595959] text-white/90 hover:bg-[#4d4d4d] transition-colors cursor-pointer rounded-b-[2px]">
+                  <div className="grid min-w-[560px] grid-cols-[30px_minmax(0,1fr)_140px_40px_40px] items-center bg-[#595959] text-white/90 hover:bg-[#4d4d4d] transition-colors cursor-pointer rounded-b-[2px] sm:grid-cols-[30px_minmax(0,1fr)_150px_40px_40px]">
                     <div className="py-3.5 px-3 flex justify-center">
                       <span className="text-xl font-light leading-none">+</span>
                     </div>

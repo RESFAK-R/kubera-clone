@@ -7,6 +7,7 @@ import {
   AnyRuleConfig,
 } from '@/types/rules'
 import { getRulesForUser, saveRuleConfig } from '@/app/dashboard/fast-forward/rules-actions'
+import { normalizeRuleDefinition } from '@/lib/ruleDefaults'
 
 /**
  * Hook for managing Fast Forward rules.
@@ -14,7 +15,7 @@ import { getRulesForUser, saveRuleConfig } from '@/app/dashboard/fast-forward/ru
  * Falls back to fetching from Supabase only when no server rules are provided.
  */
 export function useFastForwardRules(initialRules?: RuleDefinition[]) {
-  const [rules, setRules] = useState<RuleDefinition[]>(initialRules ?? [])
+  const [rules, setRules] = useState<RuleDefinition[]>((initialRules ?? []).map(normalizeRuleDefinition))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -24,7 +25,7 @@ export function useFastForwardRules(initialRules?: RuleDefinition[]) {
       setLoading(true)
       setError(null)
       const fetched = await getRulesForUser()
-      setRules(fetched)
+      setRules(fetched.map(normalizeRuleDefinition))
     } catch (err) {
       setError((err as Error).message)
     } finally {

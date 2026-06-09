@@ -8,6 +8,7 @@ import {
   DEFAULT_ENABLED_STATE,
   type RuleDefinition,
 } from '@/types/rules'
+import { normalizeRuleDefinition } from '@/lib/ruleDefaults'
 
 export default async function FastForwardPage() {
   const supabase = await createClient()
@@ -49,14 +50,15 @@ export default async function FastForwardPage() {
       .from('scenario_rules')
       .insert(toInsert)
       .select()
-    rules = (inserted ?? toInsert.map((r, i) => ({ id: `seed-${i}`, ...r }))) as RuleDefinition[]
+    rules = ((inserted ?? toInsert.map((r, i) => ({ id: `seed-${i}`, ...r }))) as RuleDefinition[])
+      .map(normalizeRuleDefinition)
   } else {
-    rules = rulesRaw as RuleDefinition[]
+    rules = (rulesRaw as RuleDefinition[]).map(normalizeRuleDefinition)
   }
 
   return (
-    <div className="flex-1 w-full bg-[#f4f5f5] pb-24 px-8 md:px-16 overflow-y-auto">
-      <div className="max-w-[1100px] mx-auto pt-10">
+    <div className="w-full min-w-0 overflow-x-hidden bg-[#f4f5f5] px-4 pb-20 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1120px] min-w-0 pt-8">
         <FastForwardContent
           initialNetWorth={totalNetWorth}
           totalAssets={totalAssets}

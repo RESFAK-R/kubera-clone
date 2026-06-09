@@ -41,7 +41,6 @@ export default async function NetWorthPage() {
   const totals = computeNetWorthTotals(assets)
   const sym = currencySymbol(baseCurrency)
 
-  const latest = snapshots[snapshots.length - 1] ?? null
   const yesterday = snapshotByOffset(snapshots, 1)
   const weekAgo = snapshotByOffset(snapshots, 7)
   const yearAgo = snapshotByOffset(snapshots, 365)
@@ -73,18 +72,18 @@ export default async function NetWorthPage() {
   )
 
   return (
-    <div className="flex-1 w-full bg-[#f4f5f5] pb-24 px-8 md:px-16 relative">
-      <div className="max-w-[1200px] mx-auto pt-4">
-        <h1 className="text-[40px] font-medium text-[#1a1a1a] mb-12 tracking-tight">
+    <div className="w-full min-w-0 overflow-x-hidden bg-[#f4f5f5] px-4 pb-20 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1180px] min-w-0 pt-4 sm:pt-8">
+        <h1 className="mb-8 break-words text-[32px] font-medium leading-tight tracking-tight text-[#1a1a1a] sm:text-[40px] lg:mb-10 lg:text-[48px]">
           Namaste, {userName} <span className="text-[#3b82f6] text-[24px] align-top ml-[-4px]">#</span>
         </h1>
 
-        <div className="grid grid-cols-12 gap-8 mb-8">
-          <div className="col-span-8 bg-white border border-[#e5e7eb] rounded-[4px] p-10 min-h-[460px] flex flex-col justify-between shadow-sm relative overflow-hidden">
+        <div className="mb-8 grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-12 xl:gap-8">
+          <div className="min-w-0 bg-white border border-[#e5e7eb] rounded-[4px] p-6 sm:p-8 lg:p-10 min-h-[420px] xl:min-h-[460px] flex flex-col justify-between shadow-sm relative overflow-hidden xl:col-span-8">
             <div>
               <h3 className="text-[15px] font-medium text-gray-500 mb-2">Net Worth</h3>
-              <div className="text-[64px] font-medium tracking-tighter leading-tight flex items-baseline">
-                <span className="text-[32px] font-bold mr-2 mt-[-10px]">{sym}</span>
+              <div className="flex min-w-0 flex-wrap items-baseline text-[48px] font-medium leading-tight tracking-tight sm:text-[58px] lg:text-[64px]">
+                <span className="mr-2 text-[26px] font-bold sm:text-[32px]">{sym}</span>
                 {totals.netWorth.toLocaleString('de-DE')}
               </div>
               {dayDelta && (
@@ -100,13 +99,13 @@ export default async function NetWorthPage() {
                 <h3 className="text-[15px] font-medium text-gray-500">Investable</h3>
                 <span className="text-gray-400 text-[14px] cursor-help" title="Stocks + Crypto + Metals">ⓘ</span>
               </div>
-              <div className="text-[48px] font-medium tracking-tighter leading-tight flex items-baseline">
+              <div className="flex min-w-0 flex-wrap items-baseline text-[38px] font-medium leading-tight tracking-tight sm:text-[48px]">
                 <span className="text-[24px] font-bold mr-2">{sym}</span>
                 {totals.investable.toLocaleString('de-DE')}
               </div>
             </div>
 
-            <div className="mt-12 grid grid-cols-2 gap-12 max-w-sm">
+            <div className="mt-12 grid max-w-sm grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-12">
               <div>
                 <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
                   CAGR{' '}
@@ -131,7 +130,7 @@ export default async function NetWorthPage() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-8 max-w-md">
+            <div className="mt-4 grid max-w-md grid-cols-3 gap-4 sm:gap-8">
               {BENCHMARK_SYMBOLS.map(({ label }) => {
                 const b = benchmarkByLabel.get(label)
                 const pct = b?.change_pct_24h ?? null
@@ -147,10 +146,10 @@ export default async function NetWorthPage() {
             </div>
           </div>
 
-          <div className="col-span-4 flex flex-col gap-6">
-            <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-10 flex-1 shadow-sm">
+          <div className="min-w-0 flex flex-col gap-6 xl:col-span-4">
+            <div className="min-w-0 overflow-x-hidden bg-white border border-[#e5e7eb] rounded-[4px] p-6 sm:p-8 lg:p-10 shadow-sm xl:min-h-[230px]">
               <h3 className="text-[15px] font-medium text-gray-500 mb-2">Assets</h3>
-              <div className="text-[48px] font-medium tracking-tighter leading-tight flex items-baseline">
+              <div className="flex min-w-0 flex-wrap items-baseline text-[38px] font-medium leading-tight tracking-tight sm:text-[44px] xl:text-[48px]">
                 <span className="text-[24px] font-bold mr-2">{sym}</span>
                 {totals.totalAssets.toLocaleString('de-DE')}
               </div>
@@ -170,12 +169,12 @@ export default async function NetWorthPage() {
               </div>
             </div>
 
-            <div className="bg-white border border-[#e5e7eb] rounded-[4px] p-10 flex-1 shadow-sm">
+            <div className="min-w-0 overflow-x-hidden bg-white border border-[#e5e7eb] rounded-[4px] p-6 sm:p-8 lg:p-10 shadow-sm xl:min-h-[230px]">
               <div className="flex items-center gap-1 mb-2">
                 <h3 className="text-[15px] font-medium text-gray-500">Cash on hand</h3>
                 <span className="text-gray-400 text-[14px] cursor-help">ⓘ</span>
               </div>
-              <div className="text-[48px] font-medium tracking-tighter leading-tight">
+              <div className="break-words text-[38px] font-medium leading-tight tracking-tight sm:text-[44px] xl:text-[48px]">
                 {totals.cash === 0 ? 'Zero' : formatCurrency(totals.cash, baseCurrency)}
               </div>
             </div>
@@ -197,7 +196,7 @@ export default async function NetWorthPage() {
         />
       </div>
 
-      <button className="fixed bottom-8 right-8 w-14 h-14 bg-white shadow-xl border border-gray-200 rounded-full flex items-center justify-center text-[24px] font-medium text-gray-800 hover:scale-110 transition-transform active:scale-95 group overflow-hidden">
+      <button className="fixed bottom-6 right-6 w-14 h-14 bg-white shadow-xl border border-gray-200 rounded-full flex items-center justify-center text-[24px] font-medium text-gray-800 hover:scale-110 transition-transform active:scale-95 group overflow-hidden lg:bottom-8 lg:right-8">
         <span className="relative z-10">?</span>
         <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
       </button>

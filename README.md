@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Kubera Clone
 
-## Getting Started
+Personal wealth-tracking dashboard inspired by Kubera. The app models assets, debts, net worth, projections and recap views with a modern Next.js interface backed by Supabase.
 
-First, run the development server:
+## What It Does
+
+- Tracks net worth across assets and liabilities
+- Manages asset and debt spreadsheets from the dashboard
+- Projects wealth scenarios with fast-forward simulations
+- Produces recap charts and PDF reports
+- Includes beneficiary and document flows
+- Provides authenticated login/signup flows with Supabase
+- Experiments with an AI assistant surface inside the dashboard
+
+## Stack
+
+- Next.js, React and TypeScript
+- Supabase for auth and data access
+- Recharts for financial visualizations
+- shadcn-style components and Tailwind CSS
+- Framer Motion for UI motion
+- jsPDF and jsPDF AutoTable for report generation
+- Playwright for browser testing/screenshot workflows
+
+## Run Locally
 
 ```bash
+npm install
+cp .env.local.example .env.local # if you add an example file
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Useful Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dev      # start the development server
+npm run build    # create a production build
+npm run start    # run the production build
+npm run lint     # run ESLint
+```
 
-## Learn More
+## Project Layout
 
-To learn more about Next.js, take a look at the following resources:
+```text
+src/app/
+  dashboard/
+    assets/          # asset tracking
+    debts/           # liabilities tracking
+    fast-forward/    # projections and scenario rules
+    networth/        # net worth views
+    recap/           # charts and reports
+    beneficiary/     # beneficiary/document flows
+  login/             # authentication
+  signup/            # authentication
+src/components/dashboard/
+  charts, spreadsheets, navigation and dashboard surfaces
+supabase/
+  local Supabase configuration
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Note
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Screenshots are intentionally kept out of the public README until sample data is sanitized. Financial dashboards should not publish real or ambiguous personal data by accident.

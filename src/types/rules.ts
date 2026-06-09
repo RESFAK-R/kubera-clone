@@ -18,11 +18,14 @@ export type RuleConfig = Record<string, unknown>
  * - Active months (can disable certain months)
  * - Extra payments in specific months (13esima, 14esima, etc.)
  */
+export type EntryRecurrence = 'monthly' | 'quarterly' | 'yearly'
+
 export interface ExtraEntry {
   id: string
   description: string
   amount: number
   enabled: boolean
+  recurrence?: EntryRecurrence
 }
 
 export interface IncomeRuleConfig extends RuleConfig {

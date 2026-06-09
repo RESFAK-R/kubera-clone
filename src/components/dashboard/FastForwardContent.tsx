@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import {
   LineChart,
   Line,
@@ -20,7 +20,9 @@ import {
   IncomeRuleConfig,
   ExpenseRuleConfig,
   CashGrowthRuleConfig,
+  InflationRuleConfig,
   ExtraEntry,
+  EntryRecurrence,
 } from '@/types/rules'
 import {
   applyIncomeRule,
@@ -39,6 +41,20 @@ type Props = {
   serverRules?: RuleDefinition[]
 }
 
+/** Returns true when absolute month offset `m` (0-based) falls on this recurrence */
+function matchesRecurrence(m: number, recurrence: EntryRecurrence | undefined): boolean {
+  if (!recurrence || recurrence === 'monthly') return true
+  if (recurrence === 'quarterly') return m % 3 === 0
+  if (recurrence === 'yearly') return m % 12 === 0
+  return true
+}
+
+function recurrenceLabel(r: EntryRecurrence | undefined): string {
+  if (r === 'quarterly') return 'every 3 months'
+  if (r === 'yearly') return 'every year'
+  return 'every month'
+}
+
 type Tab = 'Net Worth Projections' | 'Charts' | 'Cash Forecast'
 
 type Rule = {
@@ -47,6 +63,7 @@ type Rule = {
   isExtra?: boolean
   extraId?: string
   extraType?: 'income' | 'expense'
+  extraRecurrence?: EntryRecurrence
   render: () => React.ReactNode
 }
 
@@ -123,6 +140,7 @@ export function FastForwardContent({
   const expenseRule = getRule('expense')
   const cashRule = getRule('cash')
   const investableRule = getRule('investable')
+  const inflationRule = getRule('inflation')
 
   // Extra entries are stored inside income/expense rule config (persisted to Supabase via updateRule)
   const incomeConfig = incomeRule?.config as IncomeRuleConfig | undefined
@@ -130,11 +148,15 @@ export function FastForwardContent({
   const extraIncomeEntries: ExtraEntry[] = incomeConfig?.extra_entries ?? []
   const extraExpenseEntries: ExtraEntry[] = expenseConfig?.extra_entries ?? []
 
-  const addExtraEntry = async (type: 'income' | 'expense') => {
+  const addExtraEntry = async (
+    type: 'income' | 'expense',
+    description?: string,
+    amount?: number,
+  ) => {
     const newEntry: ExtraEntry = {
       id: crypto.randomUUID(),
-      description: type === 'income' ? 'New Income' : 'New Expense',
-      amount: 0,
+      description: description ?? (type === 'income' ? 'New Income' : 'New Expense'),
+      amount: amount ?? 0,
       enabled: true,
     }
     if (type === 'income' && incomeRule) {
@@ -314,6 +336,7 @@ export function FastForwardContent({
       // Extra income entries (from income rule config)
       for (const er of extraIncomeEntries) {
         if (!er.enabled) continue
+        if (!matchesRecurrence(m, er.recurrence)) continue
         const key = `${year}-${monthIndex}:extra-inc-${er.id}`
         const ovr = rowOverrides[key]
         list.push({
@@ -329,6 +352,7 @@ export function FastForwardContent({
       // Extra expense entries (from expense rule config)
       for (const er of extraExpenseEntries) {
         if (!er.enabled) continue
+        if (!matchesRecurrence(m, er.recurrence)) continue
         const key = `${year}-${monthIndex}:extra-exp-${er.id}`
         const ovr = rowOverrides[key]
         list.push({
@@ -396,16 +420,11 @@ export function FastForwardContent({
     let cumIncome = 0
     let cumExpense = 0
 
-    const extraIncome = extraIncomeEntries
-      .filter((r) => r.enabled)
-      .reduce((s, r) => s + r.amount, 0)
-    const extraExpense = extraExpenseEntries
-      .filter((r) => r.enabled)
-      .reduce((s, r) => s + r.amount, 0)
-
     for (let m = 1; m <= months; m++) {
       const monthIndex = (m - 1) % 12
       const yearsSinceStart = Math.floor(m / 12)
+      // m-1 for recurrence (0-based offset)
+      const mOffset = m - 1
 
       // Apply income
       let monthIncome = 0
@@ -414,11 +433,19 @@ export function FastForwardContent({
         monthIncome = income.totalIncome
       }
 
+      const extraIncome = extraIncomeEntries
+        .filter((r) => r.enabled && matchesRecurrence(mOffset, r.recurrence))
+        .reduce((s, r) => s + r.amount, 0)
+
       // Apply expense
       let monthExpense = 0
       if (expenseRule.enabled) {
         monthExpense = applyExpenseRule(expenseConfig, monthIndex)
       }
+
+      const extraExpense = extraExpenseEntries
+        .filter((r) => r.enabled && matchesRecurrence(mOffset, r.recurrence))
+        .reduce((s, r) => s + r.amount, 0)
 
       const netFlow = monthIncome + extraIncome - monthExpense - extraExpense
       cash += netFlow
@@ -495,22 +522,23 @@ export function FastForwardContent({
     let cash = cashStart
     let investable = investableStart
 
-    const extraIncome = extraIncomeEntries
-      .filter((r) => r.enabled)
-      .reduce((s, r) => s + r.amount, 0)
-    const extraExpense = extraExpenseEntries
-      .filter((r) => r.enabled)
-      .reduce((s, r) => s + r.amount, 0)
-
     for (let m = 1; m <= months; m++) {
       const monthIndex = (m - 1) % 12
       const yearsSinceStart = Math.floor(m / 12)
+      const mOffset = m - 1
 
       if (incomeRule.enabled) {
         const income = applyIncomeRule(incomeConfig, monthIndex, yearsSinceStart - 1)
         cash += income.totalIncome
         totalIncome += income.totalIncome
       }
+
+      const monthExtraIncome = extraIncomeEntries
+        .filter((r) => r.enabled && matchesRecurrence(mOffset, r.recurrence))
+        .reduce((s, r) => s + r.amount, 0)
+      const monthExtraExpense = extraExpenseEntries
+        .filter((r) => r.enabled && matchesRecurrence(mOffset, r.recurrence))
+        .reduce((s, r) => s + r.amount, 0)
 
       if (expenseRule.enabled) {
         const expense = applyExpenseRule(expenseConfig, monthIndex)
@@ -530,10 +558,10 @@ export function FastForwardContent({
         totalInvGrowth += g
       }
 
-      cash += extraIncome
-      cash -= extraExpense
-      totalIncome += extraIncome
-      totalExpense += extraExpense
+      cash += monthExtraIncome
+      cash -= monthExtraExpense
+      totalIncome += monthExtraIncome
+      totalExpense += monthExtraExpense
     }
 
     const cashEnd = cash
@@ -740,8 +768,15 @@ export function FastForwardContent({
         const cfg = cashRule?.config as CashGrowthRuleConfig | undefined
         return (
           <>
-            Value of <EditLink>Cash</EditLink> to change by{' '}
-            <span className="text-blue-500">{cfg?.growth_percent_yearly ?? 0}%</span> per year
+            Value of{' '}
+            <EditLink onClick={() => handleEditRule('cash')}>Cash</EditLink>
+            {' '}to change by{' '}
+            <InlineNumber
+              value={cfg?.growth_percent_yearly ?? 0}
+              onSave={(v) => cashRule && updateRule('cash', cashRule.enabled, { ...cfg, growth_percent_yearly: v } as CashGrowthRuleConfig)}
+              className="text-blue-500"
+              suffix="% per year"
+            />
           </>
         )
       },
@@ -753,8 +788,15 @@ export function FastForwardContent({
         const cfg = investableRule?.config as CashGrowthRuleConfig | undefined
         return (
           <>
-            Value of <EditLink>Investable Assets</EditLink> to change by{' '}
-            <span className="text-blue-500">{cfg?.growth_percent_yearly ?? 0}%</span> per year
+            Value of{' '}
+            <EditLink onClick={() => handleEditRule('investable')}>Investable Assets</EditLink>
+            {' '}to change by{' '}
+            <InlineNumber
+              value={cfg?.growth_percent_yearly ?? 0}
+              onSave={(v) => investableRule && updateRule('investable', investableRule.enabled, { ...cfg, growth_percent_yearly: v } as CashGrowthRuleConfig)}
+              className="text-blue-500"
+              suffix="% per year"
+            />
           </>
         )
       },
@@ -766,11 +808,29 @@ export function FastForwardContent({
         const cfg = incomeRule?.config as IncomeRuleConfig | undefined
         return (
           <>
-            Income of <EditLink>{sym === '€' ? 'EUR' : 'USD'}</EditLink>{' '}
-            <span className="text-blue-500">{cfg?.base_monthly?.toLocaleString('de-DE') ?? 0}</span> from{' '}
-            <EditLink>Salary</EditLink>. Repeats <EditLink>every month</EditLink>. Revised to{' '}
-            +<span className="text-blue-500">{cfg?.yearly_bump_percent ?? 0}%</span> every year in{' '}
-            <EditLink>{getMonthInfo(cfg?.yearly_bump_month ?? 0).shortName}</EditLink>
+            Income of{' '}
+            <EditLink onClick={() => handleEditRule('income')}>{sym === '€' ? 'EUR' : 'USD'}</EditLink>{' '}
+            <InlineNumber
+              value={cfg?.base_monthly ?? 0}
+              onSave={(v) => incomeRule && updateRule('income', incomeRule.enabled, { ...cfg, base_monthly: v } as IncomeRuleConfig)}
+              className="text-blue-500"
+            />{' '}
+            from{' '}
+            <EditLink onClick={() => handleEditRule('income')}>Salary</EditLink>
+            . Repeats{' '}
+            <EditLink onClick={() => handleEditRule('income')}>every month</EditLink>
+            . Revised to{' '}
+            <InlineNumber
+              value={cfg?.yearly_bump_percent ?? 0}
+              onSave={(v) => incomeRule && updateRule('income', incomeRule.enabled, { ...cfg, yearly_bump_percent: v } as IncomeRuleConfig)}
+              className="text-blue-500"
+              prefix="+"
+              suffix="%"
+            />{' '}
+            every year in{' '}
+            <EditLink onClick={() => handleEditRule('income')}>
+              {getMonthInfo(cfg?.yearly_bump_month ?? 0).shortName}
+            </EditLink>
           </>
         )
       },
@@ -782,9 +842,35 @@ export function FastForwardContent({
         const cfg = expenseRule?.config as ExpenseRuleConfig | undefined
         return (
           <>
-            Expense of <EditLink>{sym === '€' ? 'EUR' : 'USD'}</EditLink>{' '}
-            <span className="text-blue-500">{cfg?.base_monthly?.toLocaleString('de-DE') ?? 0}</span> towards{' '}
-            <EditLink>Expenses</EditLink>. Repeats <EditLink>every month</EditLink>
+            Expense of{' '}
+            <EditLink onClick={() => handleEditRule('expense')}>{sym === '€' ? 'EUR' : 'USD'}</EditLink>{' '}
+            <InlineNumber
+              value={cfg?.base_monthly ?? 0}
+              onSave={(v) => expenseRule && updateRule('expense', expenseRule.enabled, { ...cfg, base_monthly: v } as ExpenseRuleConfig)}
+              className="text-blue-500"
+            />{' '}
+            towards{' '}
+            <EditLink onClick={() => handleEditRule('expense')}>Expenses</EditLink>
+            . Repeats{' '}
+            <EditLink onClick={() => handleEditRule('expense')}>every month</EditLink>
+          </>
+        )
+      },
+    },
+    {
+      id: 'inflation',
+      enabled: inflationRule?.enabled ?? false,
+      render: () => {
+        const cfg = inflationRule?.config as InflationRuleConfig | undefined
+        return (
+          <>
+            Inflation rate is{' '}
+            <InlineNumber
+              value={cfg?.inflation_percent_yearly ?? 0}
+              onSave={(v) => inflationRule && updateRule('inflation', inflationRule.enabled, { ...cfg, inflation_percent_yearly: v } as InflationRuleConfig)}
+              className="text-blue-500"
+              suffix="% per year"
+            />
           </>
         )
       },
@@ -795,21 +881,26 @@ export function FastForwardContent({
       isExtra: true,
       extraId: er.id,
       extraType: 'income' as const,
+      extraRecurrence: er.recurrence,
       render: () => (
         <>
-          Income of <EditLink>{sym === '€' ? 'EUR' : 'USD'}</EditLink>{' '}
-          <span className="text-blue-500">{er.amount.toLocaleString('de-DE')}</span> from{' '}
-          <span
-            contentEditable
-            suppressContentEditableWarning
-            onBlur={(e) =>
-              updateExtraEntry('income', er.id, { description: e.currentTarget.textContent ?? er.description })
-            }
-            className="text-blue-500 underline decoration-dotted underline-offset-2 cursor-text focus:outline-none"
-          >
-            {er.description}
+          Income of <span className="text-gray-400">{sym === '€' ? 'EUR' : 'USD'}</span>{' '}
+          <InlineNumber
+            value={er.amount}
+            onSave={(v) => updateExtraEntry('income', er.id, { amount: v })}
+            className="text-blue-500"
+          />{' '}
+          from{' '}
+          <InlineText
+            value={er.description}
+            onSave={(v) => updateExtraEntry('income', er.id, { description: v })}
+            placeholder="Salary"
+            className="text-blue-500"
+          />
+          . Repeats{' '}
+          <span className="text-blue-500 underline decoration-dotted underline-offset-2">
+            {recurrenceLabel(er.recurrence)}
           </span>
-          . Repeats every month
         </>
       ),
     })),
@@ -819,21 +910,26 @@ export function FastForwardContent({
       isExtra: true,
       extraId: er.id,
       extraType: 'expense' as const,
+      extraRecurrence: er.recurrence,
       render: () => (
         <>
-          Expense of <EditLink>{sym === '€' ? 'EUR' : 'USD'}</EditLink>{' '}
-          <span className="text-blue-500">{er.amount.toLocaleString('de-DE')}</span> for{' '}
-          <span
-            contentEditable
-            suppressContentEditableWarning
-            onBlur={(e) =>
-              updateExtraEntry('expense', er.id, { description: e.currentTarget.textContent ?? er.description })
-            }
-            className="text-blue-500 underline decoration-dotted underline-offset-2 cursor-text focus:outline-none"
-          >
-            {er.description}
+          Expense of <span className="text-gray-400">{sym === '€' ? 'EUR' : 'USD'}</span>{' '}
+          <InlineNumber
+            value={er.amount}
+            onSave={(v) => updateExtraEntry('expense', er.id, { amount: v })}
+            className="text-blue-500"
+          />{' '}
+          towards{' '}
+          <InlineText
+            value={er.description}
+            onSave={(v) => updateExtraEntry('expense', er.id, { description: v })}
+            placeholder="Expenses"
+            className="text-blue-500"
+          />
+          . Repeats{' '}
+          <span className="text-blue-500 underline decoration-dotted underline-offset-2">
+            {recurrenceLabel(er.recurrence)}
           </span>
-          . Repeats every month
         </>
       ),
     })),
@@ -995,7 +1091,11 @@ export function FastForwardContent({
               const rule = displayRules.find((r) => r.extraId === id)
               if (rule?.extraType) removeExtraEntry(rule.extraType, id)
             }}
-            onAddRule={(type) => addExtraEntry(type)}
+            onAddRule={(type, desc, amount) => addExtraEntry(type, desc, amount)}
+            onEditExtra={(id, patch) => {
+              const rule = displayRules.find((r) => r.extraId === id)
+              if (rule?.extraType) updateExtraEntry(rule.extraType, id, patch)
+            }}
             summary={fmtCompact(y20.netWorth).replace('Million', 'M')}
           />
         </div>
@@ -1067,7 +1167,11 @@ export function FastForwardContent({
               const rule = displayRules.find((r) => r.extraId === id)
               if (rule?.extraType) removeExtraEntry(rule.extraType, id)
             }}
-            onAddRule={(type) => addExtraEntry(type)}
+            onAddRule={(type, desc, amount) => addExtraEntry(type, desc, amount)}
+            onEditExtra={(id, patch) => {
+              const rule = displayRules.find((r) => r.extraId === id)
+              if (rule?.extraType) updateExtraEntry(rule.extraType, id, patch)
+            }}
             summary={fmtCompact(y20.netWorth).replace('Million', 'M')}
           />
         </div>
@@ -1569,21 +1673,45 @@ function ScenarioRulesBlock({
   onEditRule,
   onRemoveRule,
   onAddRule,
+  onEditExtra,
   summary,
 }: {
   rules: Rule[]
   toggle: (key: string) => void
   onEditRule: (ruleType: string) => void
   onRemoveRule: (id: string) => void
-  onAddRule: (type: 'income' | 'expense') => void
+  onAddRule: (type: 'income' | 'expense', description: string, amount: number) => void
+  onEditExtra: (id: string, patch: Partial<ExtraEntry>) => void
   summary: string
 }) {
   const [formOpen, setFormOpen] = useState(false)
   const [ruleType, setRuleType] = useState<'income' | 'expense'>('income')
+  const [ruleDesc, setRuleDesc] = useState('')
+  const [ruleAmount, setRuleAmount] = useState('')
+  const [expandedExtra, setExpandedExtra] = useState<string | null>(null)
+  const descRef = useRef<HTMLInputElement>(null)
+
+  const openForm = () => {
+    setRuleDesc('')
+    setRuleAmount('')
+    setRuleType('income')
+    setExpandedExtra(null)
+    setFormOpen(true)
+    setTimeout(() => descRef.current?.focus(), 0)
+  }
 
   const handleAdd = () => {
-    onAddRule(ruleType)
+    const desc = ruleDesc.trim() || (ruleType === 'income' ? 'New Income' : 'New Expense')
+    const amount = parseFloat(ruleAmount) || 0
+    onAddRule(ruleType, desc, amount)
     setFormOpen(false)
+    setRuleDesc('')
+    setRuleAmount('')
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleAdd()
+    if (e.key === 'Escape') setFormOpen(false)
   }
 
   return (
@@ -1593,9 +1721,6 @@ function ScenarioRulesBlock({
           <div className="text-[13px] font-bold text-[#1a1a1a]">Scenario A</div>
           <div className="text-[11px] text-gray-400 font-medium">{summary}</div>
         </div>
-        <button className="text-gray-400 hover:text-gray-600 ml-2">
-          <Plus className="w-4 h-4" />
-        </button>
       </div>
 
       <div className="bg-white border border-[#e5e7eb] rounded-[4px] shadow-sm overflow-hidden">
@@ -1604,60 +1729,227 @@ function ScenarioRulesBlock({
         </div>
         <div className="divide-y divide-gray-100">
           {rules.map((rule) => (
-            <div key={rule.id} className="flex items-center justify-between px-6 py-4 group">
-              <div className={`text-[14px] flex-1 min-w-0 ${rule.enabled ? 'text-[#1a1a1a]' : 'text-gray-400'}`}>
-                {rule.render()}
+            <div key={rule.id}>
+              {/* Rule row */}
+              <div className="flex items-center justify-between px-6 py-4 group">
+                <div className={`text-[14px] flex-1 min-w-0 ${rule.enabled ? 'text-[#1a1a1a]' : 'text-gray-400 line-through'}`}>
+                  {rule.render()}
+                </div>
+                <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                  <Toggle on={rule.enabled} onClick={() => toggle(rule.id)} />
+                  {rule.isExtra && rule.extraId ? (
+                    <button
+                      onClick={() => setExpandedExtra(expandedExtra === rule.extraId ? null : rule.extraId!)}
+                      className={`transition-colors ${expandedExtra === rule.extraId ? 'text-blue-500' : 'text-gray-300 hover:text-gray-600'}`}
+                      title="Edit rule"
+                      aria-label="Edit rule"
+                    >
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => onEditRule(rule.id)}
+                      className="text-gray-300 hover:text-gray-600 transition-colors"
+                      aria-label="Edit rule"
+                    >
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-3 ml-4 flex-shrink-0">
-                <Toggle on={rule.enabled} onClick={() => toggle(rule.id)} />
-                {rule.isExtra && rule.extraId ? (
+
+              {/* Inline edit panel for extra entries */}
+              {rule.isExtra && rule.extraId && expandedExtra === rule.extraId && (
+                <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em]">Repeats</span>
+                    <select
+                      value={rule.extraRecurrence ?? 'monthly'}
+                      onChange={(e) => onEditExtra(rule.extraId!, { recurrence: e.target.value as EntryRecurrence })}
+                      className="text-[12px] border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="monthly">Every month</option>
+                      <option value="quarterly">Every 3 months</option>
+                      <option value="yearly">Every year</option>
+                    </select>
+                  </div>
                   <button
-                    onClick={() => onRemoveRule(rule.extraId!)}
-                    className="text-gray-300 hover:text-red-500 transition-colors"
-                    title="Remove rule"
+                    onClick={() => { onRemoveRule(rule.extraId!); setExpandedExtra(null) }}
+                    className="ml-auto text-[11px] font-bold text-red-400 hover:text-red-600 uppercase tracking-[0.1em] flex items-center gap-1"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="w-3 h-3" /> Delete rule
                   </button>
-                ) : (
-                  <button
-                    onClick={() => onEditRule(rule.id)}
-                    className="text-gray-300 hover:text-gray-600"
-                  >
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
 
+        {/* ADD RULE form — inline, matching Kubera style */}
         {formOpen ? (
-          <div className="px-6 py-4 border-t border-gray-100 flex items-center gap-3">
-            <select
-              value={ruleType}
-              onChange={(e) => setRuleType(e.target.value as 'income' | 'expense')}
-              className="text-[13px] border border-gray-300 px-2 py-1 focus:outline-none focus:border-black rounded"
-            >
-              <option value="income">Income</option>
-              <option value="expense">Expense</option>
-            </select>
-            <button onClick={handleAdd} className="text-[11px] font-bold text-blue-500 hover:text-blue-600 uppercase tracking-[0.1em]">
-              Add
-            </button>
-            <button onClick={() => setFormOpen(false)} className="text-gray-400 hover:text-gray-600">
-              <X className="w-4 h-4" />
-            </button>
+          <div className="px-6 py-4 border-t border-gray-100 bg-gray-50">
+            <div className="flex flex-wrap items-center gap-2 text-[14px]">
+              <select
+                value={ruleType}
+                onChange={(e) => setRuleType(e.target.value as 'income' | 'expense')}
+                className="text-[13px] font-medium border-b border-gray-400 bg-transparent focus:outline-none focus:border-blue-500 py-1 pr-1 cursor-pointer"
+              >
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+              </select>
+              <span className="text-gray-500">of</span>
+              <input
+                type="number"
+                placeholder="0"
+                value={ruleAmount}
+                onChange={(e) => setRuleAmount(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="w-28 border-b border-gray-400 bg-transparent focus:outline-none focus:border-blue-500 py-1 text-center font-medium placeholder-gray-300"
+              />
+              <span className="text-gray-500">from</span>
+              <input
+                ref={descRef}
+                type="text"
+                placeholder={ruleType === 'income' ? 'Salary' : 'Expenses'}
+                value={ruleDesc}
+                onChange={(e) => setRuleDesc(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="flex-1 min-w-[120px] border-b border-gray-400 bg-transparent focus:outline-none focus:border-blue-500 py-1 placeholder-gray-300"
+              />
+              <span className="text-gray-400 text-[12px]">· repeats every month</span>
+            </div>
+            <div className="flex items-center gap-3 mt-3">
+              <button
+                onClick={handleAdd}
+                className="text-[11px] font-bold bg-blue-500 text-white px-3 py-1.5 rounded hover:bg-blue-600 uppercase tracking-[0.1em]"
+              >
+                Add Rule
+              </button>
+              <button
+                onClick={() => setFormOpen(false)}
+                className="text-[11px] text-gray-400 hover:text-gray-600 uppercase tracking-[0.1em]"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         ) : (
           <button
-            onClick={() => setFormOpen(true)}
-            className="w-full text-left px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-[0.15em] hover:text-blue-500 transition-colors border-t border-gray-100"
+            onClick={openForm}
+            className="w-full text-left px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-[0.15em] hover:text-blue-500 transition-colors border-t border-gray-100 flex items-center gap-2"
           >
-            Add Rule
+            <Plus className="w-3 h-3" /> Add Rule
           </button>
         )}
       </div>
     </>
+  )
+}
+
+/** Inline-editable number — click to edit, blur/Enter to save (Kubera-style) */
+function InlineNumber({
+  value,
+  onSave,
+  className = '',
+  prefix = '',
+  suffix = '',
+}: {
+  value: number
+  onSave: (v: number) => void
+  className?: string
+  prefix?: string
+  suffix?: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(String(value))
+
+  const commit = () => {
+    const parsed = parseFloat(draft)
+    if (!isNaN(parsed) && parsed !== value) onSave(parsed)
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <span className={`inline-flex items-center gap-0.5 ${className}`}>
+        {prefix && <span>{prefix}</span>}
+        <input
+          autoFocus
+          type="number"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit()
+            if (e.key === 'Escape') setEditing(false)
+          }}
+          className={`bg-transparent border-b border-blue-500 focus:outline-none w-20 text-center`}
+        />
+        {suffix && <span>{suffix}</span>}
+      </span>
+    )
+  }
+  return (
+    <span
+      onClick={() => { setDraft(String(value)); setEditing(true) }}
+      title="Click to edit"
+      className={`cursor-pointer underline decoration-dotted underline-offset-2 ${className}`}
+    >
+      {prefix}{value.toLocaleString('de-DE')}{suffix}
+    </span>
+  )
+}
+
+function InlineText({
+  value,
+  onSave,
+  placeholder = '',
+  className = '',
+}: {
+  value: string
+  onSave: (v: string) => void
+  placeholder?: string
+  className?: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+
+  const commit = () => {
+    const trimmed = draft.trim()
+    if (trimmed && trimmed !== value) onSave(trimmed)
+    setEditing(false)
+  }
+
+  // Keep draft in sync when value changes from outside (e.g. after save)
+  useEffect(() => {
+    if (!editing) setDraft(value)
+  }, [value, editing])
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type="text"
+        value={draft}
+        placeholder={placeholder}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit()
+          if (e.key === 'Escape') setEditing(false)
+        }}
+        className={`bg-transparent border-b border-blue-500 focus:outline-none min-w-[80px] ${className}`}
+      />
+    )
+  }
+  return (
+    <span
+      onClick={() => { setDraft(value); setEditing(true) }}
+      title="Click to edit"
+      className={`cursor-pointer underline decoration-dotted underline-offset-2 ${className}`}
+    >
+      {value || placeholder}
+    </span>
   )
 }
 
@@ -1690,9 +1982,12 @@ function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   )
 }
 
-function EditLink({ children }: { children: React.ReactNode }) {
+function EditLink({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) {
   return (
-    <span className="text-blue-500 underline decoration-dotted underline-offset-2 cursor-pointer hover:text-blue-600">
+    <span
+      onClick={onClick}
+      className="text-blue-500 underline decoration-dotted underline-offset-2 cursor-pointer hover:text-blue-600"
+    >
       {children}
     </span>
   )

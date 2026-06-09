@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AssetSpreadsheet } from '@/components/dashboard/AssetSpreadsheet'
+import { computeDelta, snapshotByOffset } from '@/lib/netWorth'
+import { formatSignedCurrency } from '@/lib/currency'
 
 export default async function AssetsPage() {
   const supabase = await createClient()
@@ -13,17 +15,20 @@ export default async function AssetsPage() {
     redirect('/login')
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  const { data: allAssets } = await supabase
-    .from('assets')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
+  const [{ data: profile }, { data: allAssets }, { data: snapshots }] = await Promise.all([
+    supabase.from('profiles').select('*').eq('id', user.id).single(),
+    supabase
+      .from('assets')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('net_worth_snapshots')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('snapshot_date', { ascending: true })
+      .limit(40),
+  ])
 
   // We are only handling assets (not liabilities) on this page
   const assets = allAssets?.filter(a => a.sheet !== 'Debts') || []
@@ -43,6 +48,9 @@ export default async function AssetsPage() {
 
   const totalAssets = assets.reduce((s, a) => s + Number(a.value), 0)
   const sym = baseCurrency === 'EUR' ? '€' : '$'
+
+  const yesterday = snapshotByOffset((snapshots ?? []) as never[], 1)
+  const dayDelta = computeDelta(totalAssets, yesterday?.total_assets)
 
   return (
     <div className="flex-1 w-full bg-[#f4f5f5] pb-24 px-8 md:px-16 overflow-y-auto">
@@ -64,7 +72,11 @@ export default async function AssetsPage() {
               </div>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-[12px] font-bold text-gray-400 uppercase tracking-widest">1 Day</span>
-                <span className="text-[12px] font-bold text-gray-300">{sym}0</span>
+                <span
+                  className={`text-[12px] font-bold ${dayDelta && dayDelta.absolute !== 0 ? (dayDelta.absolute > 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-300'}`}
+                >
+                  {dayDelta ? formatSignedCurrency(dayDelta.absolute, baseCurrency) : `${sym}0`}
+                </span>
               </div>
             </>
           )}

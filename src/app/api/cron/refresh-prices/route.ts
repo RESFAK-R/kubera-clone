@@ -123,5 +123,78 @@ export async function POST(req: Request) {
     results.errors.push(`fx: ${(e as Error).message}`)
   }
 
-  return NextResponse.json({ ok: true, ...results })
+  // Revalue tickerized assets: value = quantity * latest price (FX-converted to base currency).
+  // Append asset_history row for the change so the chart picks up the move.
+  const revaluation = { updated: 0, errors: [] as string[] }
+  try {
+    const { data: cache } = await supabase.from('tickers_cache').select('kind, symbol, price, currency')
+    const priceMap = new Map<string, { price: number; currency: string }>()
+    for (const row of cache ?? []) {
+      priceMap.set(`${row.kind}:${row.symbol.toUpperCase()}`, { price: Number(row.price), currency: row.currency })
+    }
+
+    const { data: fxRows } = await supabase
+      .from('fx_rates')
+      .select('base, quote, rate, rate_date')
+      .order('rate_date', { ascending: false })
+    const fxMap = new Map<string, number>()
+    for (const r of fxRows ?? []) {
+      const key = `${r.base}:${r.quote}`
+      if (!fxMap.has(key)) fxMap.set(key, Number(r.rate))
+    }
+    const convert = (amount: number, from: string, to: string): number | null => {
+      if (from === to) return amount
+      const direct = fxMap.get(`${from}:${to}`)
+      if (direct) return amount * direct
+      const inverse = fxMap.get(`${to}:${from}`)
+      if (inverse && inverse !== 0) return amount / inverse
+      return null
+    }
+
+    const { data: tickAssets } = await supabase
+      .from('assets')
+      .select('id, user_id, ticker, asset_type, quantity, value, currency')
+      .not('ticker', 'is', null)
+      .gt('quantity', 0)
+
+    const { data: profiles } = await supabase.from('profiles').select('id, base_currency')
+    const baseByUser = new Map<string, string>(
+      (profiles ?? []).map((p: { id: string; base_currency: string | null }) => [p.id, p.base_currency ?? 'EUR']),
+    )
+
+    for (const a of tickAssets ?? []) {
+      if (!a.ticker || !a.quantity) continue
+      const kind = a.asset_type === 'crypto' ? 'crypto' : a.asset_type === 'stock' ? 'stock' : null
+      if (!kind) continue
+      const cached = priceMap.get(`${kind}:${a.ticker.toUpperCase()}`)
+      if (!cached) continue
+
+      const baseCurrency = baseByUser.get(a.user_id) ?? 'EUR'
+      const valueInPriceCurrency = Number(a.quantity) * cached.price
+      const converted = convert(valueInPriceCurrency, cached.currency, baseCurrency)
+      if (converted == null) continue
+      const newValue = Math.round(converted * 100) / 100
+      if (Math.abs(newValue - Number(a.value)) < 0.01) continue
+
+      const { error: upErr } = await supabase
+        .from('assets')
+        .update({ value: newValue, last_priced_at: new Date().toISOString() })
+        .eq('id', a.id)
+      if (upErr) {
+        revaluation.errors.push(`asset ${a.id}: ${upErr.message}`)
+        continue
+      }
+      await supabase.from('asset_history').insert({
+        asset_id: a.id,
+        user_id: a.user_id,
+        value: newValue,
+        recorded_at: new Date().toISOString(),
+      })
+      revaluation.updated += 1
+    }
+  } catch (e) {
+    revaluation.errors.push((e as Error).message)
+  }
+
+  return NextResponse.json({ ok: true, ...results, revaluation })
 }
